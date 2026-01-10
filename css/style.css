@@ -4,18 +4,18 @@
     --card-bg: rgba(30, 41, 59, 0.7);
     --glass-bg: rgba(255, 255, 255, 0.05);
     --glass-border: rgba(255, 255, 255, 0.1);
-    
+
     --primary-color: #3b82f6;
     --primary-hover: #2563eb;
     --secondary-color: #64748b;
-    
+
     --income-color: #10b981;
     --expense-color: #ef4444;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
-    
+
     --font-main: 'Outfit', sans-serif;
-    
+
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
@@ -28,7 +28,9 @@
     font-family: var(--font-main);
 }
 
-html { font-size: 90%; }
+html {
+    font-size: 80%;
+}
 
 body {
     background-color: var(--bg-color);
@@ -45,7 +47,7 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 260px;
+    width: 220px;
     background-color: var(--sidebar-bg);
     padding: 2rem 1.5rem;
     display: flex;
@@ -158,7 +160,9 @@ body {
 }
 
 /* Buttons */
-.btn-primary, .btn-secondary, .btn-icon {
+.btn-primary,
+.btn-secondary,
+.btn-icon {
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -315,7 +319,7 @@ body {
 .account-card {
     position: relative;
     padding: 1.5rem;
-    background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
     border-radius: 16px;
     border: 1px solid var(--glass-border);
     transition: transform 0.2s ease;
@@ -405,8 +409,13 @@ body {
     font-size: 1.1rem;
 }
 
-.t-amount.income { color: var(--income-color); }
-.t-amount.expense { color: var(--expense-color); }
+.t-amount.income {
+    color: var(--income-color);
+}
+
+.t-amount.expense {
+    color: var(--expense-color);
+}
 
 /* Categories Grid */
 .categories-grid {
@@ -483,7 +492,7 @@ body {
     font-size: 0.9rem;
 }
 
-.form-group input, 
+.form-group input,
 .form-group select {
     width: 100%;
     padding: 12px;
@@ -494,7 +503,7 @@ body {
     font-family: var(--font-main);
 }
 
-.form-group input:focus, 
+.form-group input:focus,
 .form-group select:focus {
     outline: none;
     border-color: var(--primary-color);
@@ -522,7 +531,7 @@ body {
     margin-bottom: 0;
 }
 
-.type-selector input[type="radio"]:checked + label {
+.type-selector input[type="radio"]:checked+label {
     background-color: var(--primary-color);
     color: white;
 }
@@ -536,8 +545,15 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 /* Responsive */
@@ -545,6 +561,7 @@ body {
     .app-container {
         flex-direction: column;
     }
+
     .sidebar {
         width: 100%;
         padding: 1rem;
@@ -554,13 +571,17 @@ body {
         border-right: none;
         border-bottom: 1px solid var(--glass-border);
     }
+
     .nav-links {
         flex-direction: row;
-        display: none; /* Mobile menu to be implemented if needed */
+        display: none;
+        /* Mobile menu to be implemented if needed */
     }
+
     .logo {
         margin-bottom: 0;
     }
+
     .charts-section {
         grid-template-columns: 1fr;
     }
@@ -577,7 +598,7 @@ body {
 .card-actions i {
     cursor: pointer;
     padding: 5px;
-    background: rgba(0,0,0,0.3);
+    background: rgba(0, 0, 0, 0.3);
     border-radius: 5px;
     color: white;
     transition: 0.2s;
@@ -597,8 +618,15 @@ body {
     padding: 4px;
     border-radius: 4px;
 }
-.delete-btn:hover { background: rgba(255,0,0,0.1); }
 
-.category-card:hover { border-color: var(--primary-color); }
-.transaction-item:hover { background: rgba(255,255,255,0.02); }
+.delete-btn:hover {
+    background: rgba(255, 0, 0, 0.1);
+}
 
+.category-card:hover {
+    border-color: var(--primary-color);
+}
+
+.transaction-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
