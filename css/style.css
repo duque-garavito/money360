@@ -29,7 +29,7 @@
 }
 
 html {
-    font-size: 80%;
+    font-size: 75%;
 }
 
 body {
@@ -289,6 +289,13 @@ body {
     backdrop-filter: blur(12px);
     box-shadow: var(--shadow-sm);
 }
+
+.chart-container {
+    max-height: 400px;
+    /* Limita la altura del contenedor de gráficos */
+    width: 100%;
+}
+
 
 .chart-header {
     display: flex;
