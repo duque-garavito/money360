@@ -1,0 +1,39 @@
+// Copia esto en la sección "Firestore Database" -> "Rules" en tu consola de Firebase.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función helper para verificar si el usuario está autenticado y es dueño del documento
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Regla global: Bloquear todo por defecto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reglas para la colección 'users'
+    // Cada usuario tiene su propia "carpeta"
+    match /users/{userId} {
+      // El usuario puede leer/escribir en su propio documento base (si hiciera falta)
+      allow read, write: if isOwner(userId);
+
+      // Subcolección: Cuentas
+      match /accounts/{accountId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Subcolección: Transacciones
+      match /transactions/{transactionId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Subcolección: Categorías
+      match /categories/{categoryId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
