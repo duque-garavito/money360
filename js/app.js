@@ -10,7 +10,8 @@ import {
     onSnapshot, 
     doc, 
     deleteDoc, 
-    updateDoc, 
+    updateDoc,
+    increment, 
     query, 
     orderBy,
     signInAnonymously,
@@ -391,8 +392,13 @@ const UI = {
     },
 
     renderCategories() {
-        const container = this.elements.categoriesList;
-        container.innerHTML = '';
+        const containerIncome = document.getElementById('categories-list-income');
+        const containerExpense = document.getElementById('categories-list-expense');
+        
+        if(!containerIncome || !containerExpense) return;
+
+        containerIncome.innerHTML = '';
+        containerExpense.innerHTML = '';
 
         AppData.categories.forEach(cat => {
             const el = document.createElement('div');
@@ -415,7 +421,8 @@ const UI = {
                  if(confirm('¿Borrar etiqueta?')) Logic.deleteCategory(cat.id);
             };
 
-            container.appendChild(el);
+            if(cat.type === 'income') containerIncome.appendChild(el);
+            else containerExpense.appendChild(el);
         });
     },
 
@@ -533,71 +540,37 @@ const Logic = {
         if(!accountId) return alert('Selecciona una cuenta');
 
         if (AppData.editingId) {
-            // MODO EDICIÓN: Revertir efecto anterior y aplicar nuevo
+            // MODO EDICIÓN: Complejo, revertir anterior y aplicar nuevo
             const oldTrans = AppData.transactions.find(t => t.id === AppData.editingId);
             if(!oldTrans) return;
 
             // 1. Revertir saldo en cuenta original
+            // Si era INGRESO: restamos el monto (increment(-amount))
+            // Si era GASTO: sumamos el monto (increment(amount))
+            const oldRevertVal = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
             const oldAccRef = doc(db, `users/${AppData.user.uid}/accounts`, oldTrans.accountId);
-            const oldAcc = AppData.accounts.find(a => a.id === oldTrans.accountId);
-            
-            let revertAmount = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
-            
-            // Si la cuenta cambió, necesitamos lógica especial, pero por simplicidad asumiremos
-            // actualizaciones atómicas o secuenciales. 
-            
-            // Caso simple: Misma cuenta
-            if (oldTrans.accountId === accountId) {
-                let diff = 0;
-                // Si era ingreso +100 (saldo subió), ahora es ingreso +200 -> diff +100
-                // Si era ingreso +100, ahora es gasto 100 -> restar 100 (revertir) y restar 100 (nuevo) -> -200
-                
-                // Revertir el viejo
-                let newBalance = oldAcc.balance;
-                if(oldTrans.type === 'income') newBalance -= oldTrans.amount;
-                else newBalance += oldTrans.amount;
+            await updateDoc(oldAccRef, { balance: increment(oldRevertVal) });
 
-                // Aplicar el nuevo
-                if(type === 'income') newBalance += amount;
-                else newBalance -= amount;
+            // 2. Aplicar en nueva cuenta (puede ser la misma)
+            // Si es INGRESO: sumamos (increment(amount))
+            // Si es GASTO: restamos (increment(-amount))
+            const newVal = type === 'income' ? amount : -amount;
+            const newAccRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
+            await updateDoc(newAccRef, { balance: increment(newVal) });
 
-                await updateDoc(oldAccRef, { balance: newBalance });
-
-            } else {
-                // Cuenta cambió. Revertir en vieja, aplicar en nueva.
-                // 1. Revertir vieja
-                let oldAccBal = oldAcc.balance;
-                if(oldTrans.type === 'income') oldAccBal -= oldTrans.amount;
-                else oldAccBal += oldTrans.amount;
-                await updateDoc(oldAccRef, { balance: oldAccBal });
-
-                // 2. Aplicar en nueva
-                const newAccRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
-                const newAcc = AppData.accounts.find(a => a.id === accountId);
-                let newAccBal = newAcc.balance;
-                if(type === 'income') newAccBal += amount;
-                else newAccBal -= amount;
-                await updateDoc(newAccRef, { balance: newAccBal });
-            }
-
-            // Actualizar documento de transacción
+            // 3. Actualizar transacción
             await updateDoc(doc(db, `users/${AppData.user.uid}/transactions`, AppData.editingId), {
                 type, amount, description, accountId, categoryId, date
             });
 
         } else {
-            // MODO CREACIÓN
-            // 1. Actualizar Cuenta
+            // MODO CREACIÓN: Usar increment para operación atómica
             const accRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
-            const account = AppData.accounts.find(a => a.id === accountId);
-            let newBalance = account.balance;
             
-            if(type === 'income') newBalance += amount;
-            else newBalance -= amount;
+            const val = type === 'income' ? amount : -amount;
             
-            await updateDoc(accRef, { balance: newBalance });
+            await updateDoc(accRef, { balance: increment(val) });
 
-            // 2. Crear Transacción
             await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
                 type, amount, description, accountId, categoryId, date, createdAt: new Date()
             });
@@ -606,15 +579,17 @@ const Logic = {
 
     async deleteTransaction(t) {
         // Revertir Saldo
+        // Si era INGRESO: restamos el monto (increment(-amount))
+        // Si era GASTO: sumamos el monto (increment(amount))
         const accRef = doc(db, `users/${AppData.user.uid}/accounts`, t.accountId);
-        const account = AppData.accounts.find(a => a.id === t.accountId);
+        const revertVal = t.type === 'income' ? -t.amount : t.amount;
         
-        if(account) { // Si la cuenta aún existe
-            let newBalance = account.balance;
-            if(t.type === 'income') newBalance -= t.amount; // Restar lo que se sumó
-            else newBalance += t.amount; // Sumar lo que se restó
-            
-            await updateDoc(accRef, { balance: newBalance });
+        // No necesitamos verificar si la cuenta existe localmente, intentamos actualizar.
+        // Si la cuenta fue borrada de la DB, esto fallará, lo cual es aceptable o se puede manejar con try-catch.
+        try {
+             await updateDoc(accRef, { balance: increment(revertVal) });
+        } catch (e) {
+            console.warn("No se pudo actualizar el balance al borrar (posiblemente la cuenta no existe)", e);
         }
 
         // Borrar doc

@@ -200,8 +200,22 @@
                         <i class='bx bx-plus'></i> Nueva Etiqueta
                     </button>
                 </div>
-                <div class="categories-grid" id="categories-list">
-                    <!-- Etiquetas renderizadas aquí -->
+                <div class="categories-wrapper" style="display: flex; flex-direction: column; gap: 2rem;">
+                    
+                    <div>
+                        <h3 style="margin-bottom: 15px; color: var(--income-color); border-bottom: 1px solid var(--glass-border); padding-bottom: 5px;">Ingresos</h3>
+                        <div class="categories-grid" id="categories-list-income">
+                            <!-- Inyectado por JS -->
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 style="margin-bottom: 15px; color: var(--expense-color); border-bottom: 1px solid var(--glass-border); padding-bottom: 5px;">Gastos</h3>
+                        <div class="categories-grid" id="categories-list-expense">
+                            <!-- Inyectado por JS -->
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
