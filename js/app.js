@@ -18,7 +18,8 @@ import {
     GoogleAuthProvider,
     signInWithPopup,
     createUserWithEmailAndPassword,
-    signInWithEmailAndPassword
+    signInWithEmailAndPassword,
+    signOut
 } from './firebase.js';
 
 // --- ESTADO LOCAL (Espejo de Firebase) ---
@@ -151,16 +152,38 @@ const UI = {
     },
 
     bindEvents() {
-        // Navegación
-        this.elements.navLinks.forEach(link => {
+        // Navegación (Query dinámico para asegurar que existen)
+        const navLinks = document.querySelectorAll('.nav-links li');
+        navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.elements.navLinks.forEach(l => l.classList.remove('active'));
-                const li = e.target.closest('li');
+                // Remover clase active de todos
+                navLinks.forEach(l => l.classList.remove('active'));
+                
+                // Agregar al clickeado
+                const li = e.currentTarget; // Usar currentTarget es más seguro
                 li.classList.add('active');
-                this.switchView(li.dataset.page);
+                
+                const page = li.dataset.page;
+                console.log("Navegando a:", page);
+                this.switchView(page);
             });
         });
+
+        // Logout
+        const btnLogout = document.getElementById('btn-logout');
+        if(btnLogout) {
+            btnLogout.addEventListener('click', () => {
+                if(confirm("¿Cerrar sesión?")) {
+                    signOut(auth).then(() => {
+                        console.log("Sesión cerrada");
+                        // onAuthStateChanged manejará la redirección
+                    }).catch(error => {
+                        console.error("Error al cerrar sesión:", error);
+                    });
+                }
+            });
+        }
 
         // Modales - Abrir (Crear Nuevo)
         document.getElementById('btn-add-transaction').addEventListener('click', () => {
@@ -762,3 +785,6 @@ onAuthStateChanged(auth, (user) => {
         UI.renderAll();
     }
 });
+
+// Inicializar la aplicación
+UI.init();
