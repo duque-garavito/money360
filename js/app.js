@@ -202,12 +202,29 @@ const UI = {
              this.openModal(this.elements.modalAcc);
         });
 
-        document.getElementById('btn-add-category').addEventListener('click', () => {
-            this.resetForm('form-category');
-            AppData.editingId = null;
-            document.querySelector('#modal-category h2').textContent = 'Nueva Etiqueta';
-            this.openModal(this.elements.modalCat);
-       });
+        document.getElementById('btn-add-transfer').addEventListener('click', () => {
+             this.resetForm('form-transfer');
+             document.getElementById('transfer-date').value = new Date().toISOString().split('T')[0];
+             
+             // Populate From/To Selects
+             const selFrom = document.getElementById('transfer-from');
+             const selTo = document.getElementById('transfer-to');
+             selFrom.innerHTML = ''; selTo.innerHTML = '';
+             
+             AppData.accounts.forEach(acc => {
+                 const opt1 = new Option(`${acc.name} (${Utils.formatCurrency(acc.balance)})`, acc.id);
+                 const opt2 = new Option(acc.name, acc.id);
+                 selFrom.add(opt1);
+                 selTo.add(opt2);
+             });
+
+             this.openModal(document.getElementById('modal-transfer'));
+        });
+
+        document.getElementById('form-transfer').addEventListener('submit', (e) => {
+            e.preventDefault();
+            Logic.saveTransfer();
+        });
 
         // Modales - Cerrar
         document.querySelectorAll('.close-modal').forEach(btn => {
@@ -277,7 +294,10 @@ const UI = {
         });
 
         // Categorías (Filtradas por tipo)
-        const type = document.querySelector('input[name="type"]:checked').value;
+        const typeEl = document.querySelector('input[name="type"]:checked');
+        if(!typeEl) return; // Si no hay tipo seleccionado (raro)
+        const type = typeEl.value;
+        
         this.elements.transCategorySel.innerHTML = '';
         const filteredCats = AppData.categories.filter(c => c.type === type);
         
@@ -306,7 +326,8 @@ const UI = {
 
         AppData.transactions.forEach(t => {
             if(t.type === 'income') income += t.amount;
-            else expense += t.amount;
+            else if(t.type === 'expense') expense += t.amount;
+            // Ignore transfers in global income/expense
         });
 
         // Balance total calculado sumando el saldo ACTUAL de cada cuenta
@@ -352,37 +373,60 @@ const UI = {
         container.innerHTML = '';
         
         AppData.transactions.forEach(t => {
-            const cat = Utils.getCategoryById(t.categoryId);
-            const account = Utils.getAccountById(t.accountId);
+            let catName, accName, iconHtml, amountClass, amountSign;
+
+            if(t.type === 'transfer') {
+                const fromAcc = Utils.getAccountById(t.accountId);
+                const toAcc = Utils.getAccountById(t.categoryId); // Hack: categoryId is toAccountId
+                catName = 'Transferencia';
+                accName = `${fromAcc?.name || '?'} <i class='bx bx-right-arrow-alt'></i> ${toAcc?.name || '?'}`;
+                iconHtml = `<div class="t-icon" style="color: #cbd5e1"><i class='bx bx-transfer'></i></div>`;
+                amountClass = 'transfer';
+                amountSign = ''; 
+            } else {
+                const cat = Utils.getCategoryById(t.categoryId);
+                const account = Utils.getAccountById(t.accountId);
+                catName = cat?.name || 'S/C';
+                accName = account?.name || '?';
+                iconHtml = `<div class="t-icon" style="color: ${cat?.color || '#ccc'}">
+                            <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}'></i>
+                        </div>`;
+                amountClass = t.type;
+                amountSign = t.type === 'income' ? '+' : '-';
+            }
             
             const el = document.createElement('div');
             el.className = 'transaction-item';
-            el.onclick = () => UI.openEditTransaction(t);
-            el.style.cursor = 'pointer';
+            if(t.type !== 'transfer') {
+                 el.onclick = () => UI.openEditTransaction(t);
+                 el.style.cursor = 'pointer';
+            }
 
             el.innerHTML = `
                 <div class="t-info">
-                    <div class="t-icon" style="color: ${cat?.color || '#ccc'}">
-                        <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}'></i>
-                    </div>
+                    ${iconHtml}
                     <div class="t-details">
                         <h4>${t.description}</h4>
-                        <small>${Utils.formatDate(t.date)} • ${cat?.name || 'S/C'} • ${account?.name || '?'}</small>
+                        <small>${Utils.formatDate(t.date)} • ${catName} • <span style="font-size:0.8em; opacity:0.8">${accName}</span></small>
                     </div>
                 </div>
                 <div class="t-right">
-                    <div class="t-amount ${t.type}">
-                        ${t.type === 'income' ? '+' : '-'}${Utils.formatCurrency(t.amount)}
+                    <div class="t-amount ${amountClass}" style="${t.type==='transfer'?'color:#94a3b8':''}">
+                        ${amountSign}${Utils.formatCurrency(t.amount)}
                     </div>
                      <button class="btn-icon-min delete-btn" data-id="${t.id}"><i class='bx bx-trash'></i></button>
                 </div>
             `;
             
-            // Manejador para botón borrar (evitar que abra el editar)
+            // Manejador para botón borrar
             const deleteBtn = el.querySelector('.delete-btn');
             deleteBtn.onclick = (e) => {
                 e.stopPropagation();
-                if(confirm('¿Borrar este movimiento? Se ajustará el saldo de la cuenta.')) {
+                const msg = t.type === 'transfer' 
+                    ? '¿Borrar transferencia? El dinero volverá a la cuenta de origen.' 
+                    : '¿Borrar este movimiento? Se ajustará el saldo de la cuenta.';
+                
+                if(confirm(msg)) {
                     Logic.deleteTransaction(t);
                 }
             };
@@ -605,53 +649,107 @@ const Logic = {
     },
 
     async deleteTransaction(t) {
-        const revertVal = t.type === 'income' ? -t.amount : t.amount;
-        const accRef = doc(db, `users/${AppData.user.uid}/accounts`, t.accountId);
-
+        // Lógica de borrado (Si es transferencia o normal)
+        
         try {
-            await updateDoc(accRef, { balance: increment(revertVal) });
+            if (t.type === 'transfer') {
+                // Revertir Transferencia: Devolver a Origen, Quitar de Destino
+                 await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(t.amount) }); // Origen
+                 await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.categoryId), { balance: increment(-t.amount) }); // Destino (categoryId guarda el ID destino en transferencias)
+            } else {
+                // Revertir Normal
+                const revertVal = t.type === 'income' ? -t.amount : t.amount;
+                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(revertVal) });
+            }
+
             await deleteDoc(doc(db, `users/${AppData.user.uid}/transactions`, t.id));
-
-            // Optimistic Update
-            const localAcc = AppData.accounts.find(a => a.id === t.accountId);
-            if(localAcc) localAcc.balance += revertVal;
-            AppData.transactions = AppData.transactions.filter(tr => tr.id !== t.id);
-            UI.renderAll();
-
+            
+            // Recargar todo (Simple)
+            // UI.renderAll will be triggered by snapshot
         } catch (e) {
             console.error("Error al borrar:", e);
         }
+    },
+
+    async saveTransfer() {
+        const fromId = document.getElementById('transfer-from').value;
+        const toId = document.getElementById('transfer-to').value;
+        const amount = parseFloat(document.getElementById('transfer-amount').value);
+        const date = document.getElementById('transfer-date').value;
+        const desc = document.getElementById('transfer-desc').value || 'Transferencia';
+
+        if(fromId === toId) return alert("La cuenta de origen y destino no pueden ser la misma.");
+        if(isNaN(amount) || amount <= 0) return alert("Monto inválido");
+
+        const fromAcc = AppData.accounts.find(a => a.id === fromId);
+        if(fromAcc.balance < amount) {
+            if(!confirm("⚠️ La cuenta de origen no tiene saldo suficiente. ¿Continuar igual?")) return;
+        }
+
+        try {
+            // 1. Restar de Origen
+            await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, fromId), { balance: increment(-amount) });
+            
+            // 2. Sumar a Destino
+            await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, toId), { balance: increment(amount) });
+
+            // 3. Registrar Transacción
+            // Usaremos 'categoryId' para guardar el ID de la cuenta destino, así reutilizamos campos
+            await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
+                type: 'transfer',
+                amount,
+                description: desc,
+                accountId: fromId, // Origen
+                categoryId: toId,  // Hack: Usamos esto para el Destino
+                date,
+                createdAt: new Date()
+            });
+
+            UI.closeModal(document.getElementById('modal-transfer'));
+            document.getElementById('form-transfer').reset();
+
+        } catch (error) {
+            console.error("Error transferencia:", error);
+            alert("Error: " + error.message);
+        }
     }
 };
+
+// ... existing code ...
 
 // --- CHART.JS ---
 const Charts = {
     instances: {},
     init() {
-        if(typeof Chart === 'undefined') {
-            console.warn("Chart.js no está cargado. Los gráficos no funcionarán.");
-            return;
-        }
+        if(typeof Chart === 'undefined') return;
+
+        // Configuración Global de Fuentes y Colores
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Outfit', sans-serif";
 
         const ctxFlow = document.getElementById('cashflowChart');
         const ctxExp = document.getElementById('expensesChart');
+        const ctxBal = document.getElementById('balanceChart');
 
+        // 1. Combo Chart: Flujo de Fondos (Barras + Linea)
         if(ctxFlow) {
             this.instances.cashflow = new Chart(ctxFlow.getContext('2d'), {
-                type: 'line',
+                type: 'bar',
                 data: { labels: [], datasets: [] },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: true, labels: { color: '#94a3b8' } } },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: true } },
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
+                        x: { grid: { display: false } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' } }
                     }
                 }
             });
         }
 
+        // 2. Doughnut: Gastos
         if(ctxExp) {
             this.instances.expenses = new Chart(ctxExp.getContext('2d'), {
                 type: 'doughnut',
@@ -660,16 +758,52 @@ const Charts = {
                     responsive: true,
                     maintainAspectRatio: false,
                     cutout: '70%',
-                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', boxWidth: 10 } } }
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } },
+                    borderWidth: 0
+                }
+            });
+        }
+
+        // 3. Line: Tendencia de Saldo
+        if(ctxBal) {
+            this.instances.balance = new Chart(ctxBal.getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Saldo: ' + Utils.formatCurrency(context.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' } }
+                    },
+                    elements: {
+                        line: { tension: 0.4 },
+                        point: { radius: 0, hitRadius: 10, hoverRadius: 4 } // Minimalist points
+                    }
                 }
             });
         }
     },
 
     update() {
-        if(!this.instances.expenses || !this.instances.cashflow) return;
+        if(!this.instances.cashflow || !AppData.transactions) return;
 
-        // Grafico de Gastos
+        // --- PREPARAR DATOS COMUNES ---
+        // Ordenar transacciones por fecha ascendente
+        const sortedTrans = [...AppData.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
+        
+        // --- 1. DATOS PARA GASTOS (Doughnut) ---
         const expenseMap = {};
         AppData.transactions.filter(t => t.type === 'expense').forEach(t => {
             const cat = Utils.getCategoryById(t.categoryId);
@@ -678,50 +812,127 @@ const Charts = {
             expenseMap[name].amount += t.amount;
         });
 
-        const labels = Object.keys(expenseMap);
+        const labelsExp = Object.keys(expenseMap);
         this.instances.expenses.data = {
-            labels,
+            labels: labelsExp,
             datasets: [{
-                data: labels.map(l => expenseMap[l].amount),
-                backgroundColor: labels.map(l => expenseMap[l].color),
+                data: labelsExp.map(l => expenseMap[l].amount),
+                backgroundColor: labelsExp.map(l => expenseMap[l].color),
                 borderWidth: 0
             }]
         };
         this.instances.expenses.update();
+
+        // --- 2. DATOS PARA FLUJO & SALDO ---
+        // Necesitamos agrupar por día
+        const dailyData = {};
         
-        // Grafico Flujo
-        const sorted = [...AppData.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const dateMap = {};
-        sorted.forEach(t => {
-            if(!dateMap[t.date]) dateMap[t.date] = { inc: 0, exp: 0 };
-            if(t.type === 'income') dateMap[t.date].inc += t.amount;
-            else dateMap[t.date].exp += t.amount;
-        });
+        // Rellenar días (últimos 30 días por defecto o basado en datos)
+        // Por simplicidad, usamos el rango de fechas de las transacciones existentes
+        if(sortedTrans.length > 0) {
+            sortedTrans.forEach(t => {
+                const d = t.date; // YYYY-MM-DD
+                if(!dailyData[d]) dailyData[d] = { income: 0, expense: 0, net: 0 };
+                
+                if(t.type === 'income') dailyData[d].income += t.amount;
+                else if(t.type === 'expense') dailyData[d].expense += t.amount;
+                // Transfers don't affect net wealth, so ignore
+            });
+        }
+
+        const dates = Object.keys(dailyData).sort();
         
-        const dates = Object.keys(dateMap).sort().slice(-7);
-        
+        // -- CHART FLUJO (Combo) --
+        // Income (Bar Green), Expense (Bar Red Negative), Net (Line Black/White)
         this.instances.cashflow.data = {
-            labels: dates.map(d => d.substring(5)), // MM-DD
+            labels: dates.map(d => {
+                const [y,m,day] = d.split('-');
+                return `${day}/${m}`;
+            }),
             datasets: [
                 {
-                    label: 'Ingresos',
-                    data: dates.map(d => dateMap[d].inc),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    type: 'line',
+                    label: 'Flujo Neto',
+                    data: dates.map(d => dailyData[d].income - dailyData[d].expense),
+                    borderColor: '#f8fafc', // White/Light
+                    borderWidth: 2,
+                    pointRadius: 2,
                     tension: 0.4,
-                    fill: true
+                    order: 0 // Top layer
                 },
                 {
+                    type: 'bar',
+                    label: 'Ingresos',
+                    data: dates.map(d => dailyData[d].income),
+                    backgroundColor: '#10b981', // Green
+                    borderRadius: 4,
+                    barThickness: 10,
+                    order: 1
+                },
+                {
+                    type: 'bar',
                     label: 'Gastos',
-                    data: dates.map(d => dateMap[d].exp),
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.4,
-                    fill: true
+                    data: dates.map(d => -dailyData[d].expense), // Negative for visual effect
+                    backgroundColor: '#ef4444', // Red
+                    borderRadius: 4,
+                    barThickness: 10,
+                    order: 1
                 }
             ]
         };
         this.instances.cashflow.update();
+
+        // -- CHART TENDENCIA SALDO --
+        // Calculamos saldo retrospectivamente
+        const currentTotalBalance = AppData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        
+        // Calcular "Patrimonio Inicial Estimado" restando todos los flujos históricos conocidos
+        let totalFlow = 0;
+        sortedTrans.forEach(t => {
+            if(t.type === 'income') totalFlow += t.amount;
+            else if(t.type === 'expense') totalFlow -= t.amount;
+        });
+        
+        let runningBalance = currentTotalBalance - totalFlow; // Balance antes de la primera tx registrada
+        const balanceHistory = [];
+
+        // Ahora iteramos día a día acumulando
+        // Nota: Esto asume que tenemos TODAS las transacciones. Si falta historial, el inicio será inexacto pero la forma de la curva será correcta.
+        
+        dates.forEach(date => {
+            const dayData = dailyData[date];
+            const dayNet = dayData.income - dayData.expense;
+            runningBalance += dayNet;
+            balanceHistory.push(runningBalance);
+        });
+
+        // Si solo hay un punto, agregar el inicial para hacer una linea
+        let balanceLabels = dates.map(d => d.substring(5)); // MM-DD
+        let balanceData = balanceHistory;
+
+        if(balanceData.length === 0 && currentTotalBalance > 0) {
+             balanceLabels = ['Hoy'];
+             balanceData = [currentTotalBalance];
+        }
+
+        // Crear gradiente para el saldo
+        const ctxB = this.instances.balance.ctx;
+        const gradient = ctxB.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); // Blue
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+        this.instances.balance.data = {
+            labels: balanceLabels,
+            datasets: [{
+                label: 'Saldo Total',
+                data: balanceData,
+                borderColor: '#3b82f6',
+                backgroundColor: gradient,
+                fill: true,
+                borderWidth: 3
+            }]
+        };
+        this.instances.balance.update();
     }
 };
 
