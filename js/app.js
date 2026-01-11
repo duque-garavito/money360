@@ -363,7 +363,7 @@ const UI = {
             el.innerHTML = `
                 <div class="t-info">
                     <div class="t-icon" style="color: ${cat?.color || '#ccc'}">
-                        <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}</i>
+                        <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}'></i>
                     </div>
                     <div class="t-details">
                         <h4>${t.description}</h4>
