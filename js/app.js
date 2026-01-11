@@ -195,6 +195,7 @@ const UI = {
              this.openModal(this.elements.modalTrans);
         });
         
+        document.getElementById('btn-add-account').addEventListener('click', () => {
              this.resetForm('form-account');
              AppData.editingId = null;
              document.querySelector('#modal-account h2').textContent = 'Nueva Cuenta';
