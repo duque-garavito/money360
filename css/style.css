@@ -683,9 +683,22 @@ body {
         gap: 1rem;
     }
 
-    /* Charts height tweak for mobile */
+    /* Fix Charts on Mobile */
     .chart-container {
-        max-height: 300px;
+        height: 340px;
+        /* Fixed height to ensure visibility */
+        max-height: none;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .chart-container canvas {
+        flex: 1;
+        /* Take remaining space */
+        min-height: 0;
+        /* Allow shrinking */
+        width: 100% !important;
     }
 }
 
