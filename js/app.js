@@ -539,61 +539,88 @@ const Logic = {
 
         if(!accountId) return alert('Selecciona una cuenta');
 
-        if (AppData.editingId) {
-            // MODO EDICIÓN: Complejo, revertir anterior y aplicar nuevo
-            const oldTrans = AppData.transactions.find(t => t.id === AppData.editingId);
-            if(!oldTrans) return;
+        // Referencias DB
+        const newVal = type === 'income' ? amount : -amount;
+        const accRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
 
-            // 1. Revertir saldo en cuenta original
-            // Si era INGRESO: restamos el monto (increment(-amount))
-            // Si era GASTO: sumamos el monto (increment(amount))
-            const oldRevertVal = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
-            const oldAccRef = doc(db, `users/${AppData.user.uid}/accounts`, oldTrans.accountId);
-            await updateDoc(oldAccRef, { balance: increment(oldRevertVal) });
+        try {
+            if (AppData.editingId) {
+                const oldTrans = AppData.transactions.find(t => t.id === AppData.editingId);
+                if(!oldTrans) return;
 
-            // 2. Aplicar en nueva cuenta (puede ser la misma)
-            // Si es INGRESO: sumamos (increment(amount))
-            // Si es GASTO: restamos (increment(-amount))
-            const newVal = type === 'income' ? amount : -amount;
-            const newAccRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
-            await updateDoc(newAccRef, { balance: increment(newVal) });
+                // 1. Revertir saldo viejo (DB)
+                const oldRevertVal = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
+                const oldAccRef = doc(db, `users/${AppData.user.uid}/accounts`, oldTrans.accountId);
+                await updateDoc(oldAccRef, { balance: increment(oldRevertVal) });
 
-            // 3. Actualizar transacción
-            await updateDoc(doc(db, `users/${AppData.user.uid}/transactions`, AppData.editingId), {
-                type, amount, description, accountId, categoryId, date
-            });
+                // 2. Aplicar nuevo saldo (DB)
+                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, accountId), { balance: increment(newVal) });
 
-        } else {
-            // MODO CREACIÓN: Usar increment para operación atómica
-            const accRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
-            
-            const val = type === 'income' ? amount : -amount;
-            
-            await updateDoc(accRef, { balance: increment(val) });
+                // 3. Actualizar transacción (DB)
+                await updateDoc(doc(db, `users/${AppData.user.uid}/transactions`, AppData.editingId), {
+                    type, amount, description, accountId, categoryId, date
+                });
 
-            await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
-                type, amount, description, accountId, categoryId, date, createdAt: new Date()
-            });
+                // --- ACTUALIZACIÓN OPTIMISTA LOCAL ---
+                // Revertir en memoria local
+                const localOldAcc = AppData.accounts.find(a => a.id === oldTrans.accountId);
+                if(localOldAcc) {
+                    localOldAcc.balance += oldRevertVal;
+                }
+                // Aplicar nuevo en memoria local
+                const localNewAcc = AppData.accounts.find(a => a.id === accountId);
+                if(localNewAcc) {
+                    localNewAcc.balance += newVal;
+                }
+                // Actualizar trans local
+                Object.assign(oldTrans, { type, amount, description, accountId, categoryId, date });
+                
+                UI.renderAll(); 
+
+            } else {
+                // MODO CREACIÓN
+                
+                // 1. DB Updates
+                await updateDoc(accRef, { balance: increment(val) });
+                const newDocRef = await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
+                    type, amount, description, accountId, categoryId, date, createdAt: new Date()
+                });
+
+                // 2. --- ACTUALIZACIÓN OPTIMISTA LOCAL ---
+                const localAcc = AppData.accounts.find(a => a.id === accountId);
+                if(localAcc) {
+                    localAcc.balance += newVal;
+                }
+                // Agregar transacción ficticia local para que se vea ya
+                AppData.transactions.unshift({
+                    id: newDocRef.id, type, amount, description, accountId, categoryId, date, createdAt: new Date()
+                });
+
+                UI.renderAll();
+            }
+        } catch (error) {
+            console.error("Error guardando:", error);
+            alert("Error al guardar: " + error.message);
         }
     },
 
     async deleteTransaction(t) {
-        // Revertir Saldo
-        // Si era INGRESO: restamos el monto (increment(-amount))
-        // Si era GASTO: sumamos el monto (increment(amount))
-        const accRef = doc(db, `users/${AppData.user.uid}/accounts`, t.accountId);
         const revertVal = t.type === 'income' ? -t.amount : t.amount;
-        
-        // No necesitamos verificar si la cuenta existe localmente, intentamos actualizar.
-        // Si la cuenta fue borrada de la DB, esto fallará, lo cual es aceptable o se puede manejar con try-catch.
-        try {
-             await updateDoc(accRef, { balance: increment(revertVal) });
-        } catch (e) {
-            console.warn("No se pudo actualizar el balance al borrar (posiblemente la cuenta no existe)", e);
-        }
+        const accRef = doc(db, `users/${AppData.user.uid}/accounts`, t.accountId);
 
-        // Borrar doc
-        await deleteDoc(doc(db, `users/${AppData.user.uid}/transactions`, t.id));
+        try {
+            await updateDoc(accRef, { balance: increment(revertVal) });
+            await deleteDoc(doc(db, `users/${AppData.user.uid}/transactions`, t.id));
+
+            // Optimistic Update
+            const localAcc = AppData.accounts.find(a => a.id === t.accountId);
+            if(localAcc) localAcc.balance += revertVal;
+            AppData.transactions = AppData.transactions.filter(tr => tr.id !== t.id);
+            UI.renderAll();
+
+        } catch (e) {
+            console.error("Error al borrar:", e);
+        }
     }
 };
 
@@ -601,35 +628,47 @@ const Logic = {
 const Charts = {
     instances: {},
     init() {
-        const ctxFlow = document.getElementById('cashflowChart').getContext('2d');
-        this.instances.cashflow = new Chart(ctxFlow, {
-            type: 'line',
-            data: { labels: [], datasets: [] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
-                }
-            }
-        });
+        if(typeof Chart === 'undefined') {
+            console.warn("Chart.js no está cargado. Los gráficos no funcionarán.");
+            return;
+        }
 
-        const ctxExp = document.getElementById('expensesChart').getContext('2d');
-        this.instances.expenses = new Chart(ctxExp, {
-            type: 'doughnut',
-            data: { labels: [], datasets: [] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '70%',
-                plugins: { legend: { position: 'right', labels: { color: '#94a3b8', boxWidth: 10 } } }
-            }
-        });
+        const ctxFlow = document.getElementById('cashflowChart');
+        const ctxExp = document.getElementById('expensesChart');
+
+        if(ctxFlow) {
+            this.instances.cashflow = new Chart(ctxFlow.getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, labels: { color: '#94a3b8' } } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
+                    }
+                }
+            });
+        }
+
+        if(ctxExp) {
+            this.instances.expenses = new Chart(ctxExp.getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', boxWidth: 10 } } }
+                }
+            });
+        }
     },
 
     update() {
+        if(!this.instances.expenses || !this.instances.cashflow) return;
+
         // Grafico de Gastos
         const expenseMap = {};
         AppData.transactions.filter(t => t.type === 'expense').forEach(t => {
@@ -650,10 +689,8 @@ const Charts = {
         };
         this.instances.expenses.update();
         
-        // Grafico Flujo (Últimos 7 movimientos agrupados por fecha es muy complejo de ordenar,
-        // haremos una simplificación visual de los últimos 10 movimientos cronológicos)
+        // Grafico Flujo
         const sorted = [...AppData.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
-        // Agrupar por fecha
         const dateMap = {};
         sorted.forEach(t => {
             if(!dateMap[t.date]) dateMap[t.date] = { inc: 0, exp: 0 };
@@ -661,7 +698,7 @@ const Charts = {
             else dateMap[t.date].exp += t.amount;
         });
         
-        const dates = Object.keys(dateMap).sort().slice(-7); // Últimos 7 días activos
+        const dates = Object.keys(dateMap).sort().slice(-7);
         
         this.instances.cashflow.data = {
             labels: dates.map(d => d.substring(5)), // MM-DD
@@ -670,13 +707,17 @@ const Charts = {
                     label: 'Ingresos',
                     data: dates.map(d => dateMap[d].inc),
                     borderColor: '#10b981',
-                    tension: 0.4
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
                 },
                 {
                     label: 'Gastos',
                     data: dates.map(d => dateMap[d].exp),
                     borderColor: '#ef4444',
-                    tension: 0.4
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true
                 }
             ]
         };
