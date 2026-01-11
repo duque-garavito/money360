@@ -42,16 +42,18 @@ body {
 /* Layout */
 .app-container {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* Sidebar */
 .sidebar {
-    width: 100%;
+    width: 220px;
     background-color: var(--sidebar-bg);
     padding: 2rem 1.5rem;
     display: flex;
     flex-direction: column;
+    height: 100%;
     border-right: 1px solid var(--glass-border);
     transition: width 0.3s ease;
 }
