@@ -581,7 +581,7 @@ const Logic = {
                 // MODO CREACIÓN
                 
                 // 1. DB Updates
-                await updateDoc(accRef, { balance: increment(val) });
+                await updateDoc(accRef, { balance: increment(newVal) });
                 const newDocRef = await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
                     type, amount, description, accountId, categoryId, date, createdAt: new Date()
                 });
