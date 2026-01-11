@@ -195,10 +195,10 @@ const UI = {
              this.openModal(this.elements.modalTrans);
         });
         
-        document.getElementById('btn-add-account').addEventListener('click', () => {
              this.resetForm('form-account');
              AppData.editingId = null;
              document.querySelector('#modal-account h2').textContent = 'Nueva Cuenta';
+             document.getElementById('acc-balance').disabled = false;
              this.openModal(this.elements.modalAcc);
         });
 
@@ -479,7 +479,7 @@ const UI = {
         document.getElementById('acc-name').value = acc.name;
         document.getElementById('acc-type').value = acc.type;
         document.getElementById('acc-balance').value = acc.balance;
-        document.getElementById('acc-balance').disabled = true; // No permitir editar balance directamente, solo vía transacciones
+        document.getElementById('acc-balance').disabled = false; // Permitir editar balance para correcciones
         document.getElementById('acc-color').value = acc.color;
         
         this.openModal(this.elements.modalAcc);
@@ -536,13 +536,12 @@ const Logic = {
         const name = document.getElementById('acc-name').value;
         const type = document.getElementById('acc-type').value;
         const color = document.getElementById('acc-color').value;
-        // Solo leer balance si es nuevo
         const balanceInput = parseFloat(document.getElementById('acc-balance').value) || 0;
 
         if (AppData.editingId) {
-            // Update
+            // Update (Incluyendo balance, permitiendo correcciones manuales)
             const ref = doc(db, `users/${AppData.user.uid}/accounts`, AppData.editingId);
-            await updateDoc(ref, { name, type, color });
+            await updateDoc(ref, { name, type, color, balance: balanceInput });
         } else {
             // Create
             await addDoc(collection(db, `users/${AppData.user.uid}/accounts`), {
@@ -842,94 +841,21 @@ const Charts = {
 
         const dates = Object.keys(dailyData).sort();
         
-        // -- CHART FLUJO (Combo) --
-        // Income (Bar Green), Expense (Bar Red Negative), Net (Line Black/White)
-        this.instances.cashflow.data = {
+        // -- CHART 3: VARIACIÓN DIARIA DE SALDO --
+        // Mostrar si el saldo SUBE o BAJA cada día (Delta)
+        const deltas = dates.map(d => dailyData[d].income - dailyData[d].expense);
+        
+        this.instances.balance.data = {
             labels: dates.map(d => {
                 const [y,m,day] = d.split('-');
                 return `${day}/${m}`;
             }),
-            datasets: [
-                {
-                    type: 'line',
-                    label: 'Flujo Neto',
-                    data: dates.map(d => dailyData[d].income - dailyData[d].expense),
-                    borderColor: '#f8fafc', // White/Light
-                    borderWidth: 2,
-                    pointRadius: 2,
-                    tension: 0.4,
-                    order: 0 // Top layer
-                },
-                {
-                    type: 'bar',
-                    label: 'Ingresos',
-                    data: dates.map(d => dailyData[d].income),
-                    backgroundColor: '#10b981', // Green
-                    borderRadius: 4,
-                    barThickness: 10,
-                    order: 1
-                },
-                {
-                    type: 'bar',
-                    label: 'Gastos',
-                    data: dates.map(d => -dailyData[d].expense), // Negative for visual effect
-                    backgroundColor: '#ef4444', // Red
-                    borderRadius: 4,
-                    barThickness: 10,
-                    order: 1
-                }
-            ]
-        };
-        this.instances.cashflow.update();
-
-        // -- CHART TENDENCIA SALDO --
-        // Calculamos saldo retrospectivamente
-        const currentTotalBalance = AppData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
-        
-        // Calcular "Patrimonio Inicial Estimado" restando todos los flujos históricos conocidos
-        let totalFlow = 0;
-        sortedTrans.forEach(t => {
-            if(t.type === 'income') totalFlow += t.amount;
-            else if(t.type === 'expense') totalFlow -= t.amount;
-        });
-        
-        let runningBalance = currentTotalBalance - totalFlow; // Balance antes de la primera tx registrada
-        const balanceHistory = [];
-
-        // Ahora iteramos día a día acumulando
-        // Nota: Esto asume que tenemos TODAS las transacciones. Si falta historial, el inicio será inexacto pero la forma de la curva será correcta.
-        
-        dates.forEach(date => {
-            const dayData = dailyData[date];
-            const dayNet = dayData.income - dayData.expense;
-            runningBalance += dayNet;
-            balanceHistory.push(runningBalance);
-        });
-
-        // Si solo hay un punto, agregar el inicial para hacer una linea
-        let balanceLabels = dates.map(d => d.substring(5)); // MM-DD
-        let balanceData = balanceHistory;
-
-        if(balanceData.length === 0 && currentTotalBalance > 0) {
-             balanceLabels = ['Hoy'];
-             balanceData = [currentTotalBalance];
-        }
-
-        // Crear gradiente para el saldo
-        const ctxB = this.instances.balance.ctx;
-        const gradient = ctxB.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); // Blue
-        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-
-        this.instances.balance.data = {
-            labels: balanceLabels,
             datasets: [{
-                label: 'Saldo Total',
-                data: balanceData,
-                borderColor: '#3b82f6',
-                backgroundColor: gradient,
-                fill: true,
-                borderWidth: 3
+                label: 'Variación de Saldo',
+                data: deltas,
+                backgroundColor: deltas.map(val => val >= 0 ? '#10b981' : '#ef4444'),
+                borderRadius: 4,
+                barThickness: 20
             }]
         };
         this.instances.balance.update();
