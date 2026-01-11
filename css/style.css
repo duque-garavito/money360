@@ -566,33 +566,126 @@ body {
 }
 
 /* Responsive */
+/* Responsive Mobile Design */
 @media (max-width: 768px) {
     .app-container {
         flex-direction: column;
     }
 
+    /* Transform Sidebar into Top Header */
     .sidebar {
         width: 100%;
-        padding: 1rem;
+        height: auto;
+        /* Reset fixed height */
+        padding: 1rem 1.5rem;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
         border-right: none;
         border-bottom: 1px solid var(--glass-border);
-    }
-
-    .nav-links {
-        flex-direction: row;
-        display: none;
-        /* Mobile menu to be implemented if needed */
+        flex-shrink: 0;
+        z-index: 50;
     }
 
     .logo {
         margin-bottom: 0;
+        font-size: 1.25rem;
+    }
+
+    /* Transform Nav Links into Bottom Bar */
+    .nav-links {
+        display: flex;
+        flex-direction: row;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        background-color: #1e293b;
+        /* Solid background for visibility */
+        padding: 0.5rem 1rem;
+        justify-content: space-around;
+        border-top: 1px solid var(--glass-border);
+        z-index: 1000;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .nav-links li {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+    }
+
+    .nav-links li a {
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        font-size: 0.7rem;
+        border-radius: 8px;
+        text-align: center;
+        width: 100%;
+    }
+
+    .nav-links li.active a {
+        background: transparent;
+        color: var(--primary-color);
+    }
+
+    .nav-links li a i {
+        font-size: 1.5rem;
+        margin-bottom: 0;
+    }
+
+    /* Adjust Profile in Header */
+    .user-profile {
+        padding-top: 0;
+        border-top: none;
+        gap: 10px;
+    }
+
+    .user-info {
+        display: none;
+        /* Hide name to save space */
+    }
+
+    /* Main Content Adjustments */
+    .main-content {
+        padding: 1.25rem;
+        padding-bottom: 90px;
+        /* Safe area for bottom nav */
+    }
+
+    .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .greeting h1 {
+        font-size: 1.5rem;
+    }
+
+    .top-bar .actions {
+        width: 100%;
+    }
+
+    .top-bar .actions .btn-primary {
+        width: 100%;
     }
 
     .charts-section {
         grid-template-columns: 1fr;
+    }
+
+    .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    /* Charts height tweak for mobile */
+    .chart-container {
+        max-height: 300px;
     }
 }
 
