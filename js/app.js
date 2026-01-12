@@ -314,14 +314,14 @@ const UI = {
 
         // Opción "Externo" para modo Transferencia
         if(type === 'transfer') {
-            const extSrc = new Option('Externo / Otro (Ingreso)', 'external_source');
+            const extSrc = new Option('... fuera del sistema', 'external_source');
             selSrc.add(extSrc);
             
             // Llenar Origen con cuentas normales
             AppData.accounts.forEach(acc => selSrc.add(createOption(acc)));
 
             // Llenar Destino
-            const extDest = new Option('Externo / Otro (Gasto)', 'external_dest');
+            const extDest = new Option('... fuera del sistema', 'external_dest');
             if(selDest) {
                 selDest.add(extDest);
                 AppData.accounts.forEach(acc => selDest.add(createOption(acc)));
@@ -353,23 +353,265 @@ const UI = {
 
     // --- RENDERIZADO ---
     
-    // ... (renderAll and renderAccounts unchanged) ...
+    renderAll() {
+        this.renderAccounts();
+        this.renderTransactions();
+        this.renderCategories();
+        this.renderDashboard();
+    },
 
-    // ... (renderTransactions unchanged) ...
+    renderDashboard() {
+        // Calcular totales basados en transacciones
+        let income = 0;
+        let expense = 0;
 
-    // ... (renderCategories unchanged) ...
+        AppData.transactions.forEach(t => {
+            if(t.type === 'income') income += t.amount;
+            else if(t.type === 'expense') expense += t.amount;
+            // Ignore transfers in global income/expense
+        });
+
+        // Balance total calculado sumando el saldo ACTUAL de cada cuenta
+        // (El saldo de la cuenta es la fuente de verdad)
+        const totalBalance = AppData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
+
+        this.elements.totalIncome.textContent = Utils.formatCurrency(income);
+        this.elements.totalExpense.textContent = Utils.formatCurrency(expense);
+        this.elements.totalBalance.textContent = Utils.formatCurrency(totalBalance);
+        
+        Charts.update();
+    },
+
+    renderAccounts() {
+        const container = this.elements.accountsList;
+        container.innerHTML = '';
+
+        AppData.accounts.forEach(acc => {
+            const el = document.createElement('div');
+            el.className = 'account-card';
+            // Enable editing
+            el.onclick = (e) => {
+                // Evitar editar si se hace click en un botón de borrar futuro (si lo hubiera)
+                UI.openEditAccount(acc);
+            };
+            
+            el.innerHTML = `
+                <style>.account-card[data-id="${acc.id}"]::before { background-color: ${acc.color}; }</style>
+                <div class="card-actions">
+                     <i class='bx bxs-edit-alt' style="opacity:0.5"></i>
+                </div>
+                <div class="acc-type">${this.getAccountTypeName(acc.type)}</div>
+                <div class="acc-name">${acc.name}</div>
+                <div class="acc-balance">${Utils.formatCurrency(acc.balance)}</div>
+            `;
+            el.setAttribute('data-id', acc.id);
+            container.appendChild(el);
+        });
+    },
+
+    renderTransactions() {
+        const container = this.elements.transactionsList;
+        container.innerHTML = '';
+        
+        AppData.transactions.forEach(t => {
+            let catName, accName, iconHtml, amountClass, amountSign;
+
+            if(t.type === 'transfer') {
+                const fromAcc = Utils.getAccountById(t.accountId);
+                const toAcc = Utils.getAccountById(t.categoryId); // Hack: categoryId is toAccountId
+                catName = 'Transferencia';
+                accName = `${fromAcc?.name || '?'} <i class='bx bx-right-arrow-alt'></i> ${toAcc?.name || '?'}`;
+                iconHtml = `<div class="t-icon" style="color: #cbd5e1"><i class='bx bx-transfer'></i></div>`;
+                amountClass = 'transfer';
+                amountSign = ''; 
+            } else {
+                const cat = Utils.getCategoryById(t.categoryId);
+                const account = Utils.getAccountById(t.accountId);
+                catName = cat?.name || 'S/C';
+                accName = account?.name || '?';
+                iconHtml = `<div class="t-icon" style="color: ${cat?.color || '#ccc'}">
+                            <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}'></i>
+                        </div>`;
+                amountClass = t.type;
+                amountSign = t.type === 'income' ? '+' : '-';
+            }
+            
+            const el = document.createElement('div');
+            el.className = 'transaction-item';
+            if(t.type !== 'transfer') {
+                 el.onclick = () => UI.openEditTransaction(t);
+                 el.style.cursor = 'pointer';
+            }
+
+            el.innerHTML = `
+                <div class="t-info">
+                    ${iconHtml}
+                    <div class="t-details">
+                        <h4>${t.description}</h4>
+                        <small>${Utils.formatDate(t.date)} • ${catName} • <span style="font-size:0.8em; opacity:0.8">${accName}</span></small>
+                    </div>
+                </div>
+                <div class="t-right">
+                    <div class="t-amount ${amountClass}" style="${t.type==='transfer'?'color:#94a3b8':''}">
+                        ${amountSign}${Utils.formatCurrency(t.amount)}
+                    </div>
+                     <button class="btn-icon-min delete-btn" data-id="${t.id}"><i class='bx bx-trash'></i></button>
+                </div>
+            `;
+            
+            // Manejador para botón borrar
+            const deleteBtn = el.querySelector('.delete-btn');
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                const msg = t.type === 'transfer' 
+                    ? '¿Borrar transferencia? El dinero volverá a la cuenta de origen.' 
+                    : '¿Borrar este movimiento? Se ajustará el saldo de la cuenta.';
+                
+                if(confirm(msg)) {
+                    Logic.deleteTransaction(t);
+                }
+            };
+
+            container.appendChild(el);
+        });
+    },
+
+    renderCategories() {
+        const containerIncome = document.getElementById('categories-list-income');
+        const containerExpense = document.getElementById('categories-list-expense');
+        
+        if(!containerIncome || !containerExpense) return;
+
+        containerIncome.innerHTML = '';
+        containerExpense.innerHTML = '';
+
+        AppData.categories.forEach(cat => {
+            const el = document.createElement('div');
+            el.className = 'category-card';
+            el.onclick = () => UI.openEditCategory(cat);
+            el.style.cursor = 'pointer';
+            
+            el.innerHTML = `
+                <div class="color-dot" style="background-color: ${cat.color}"></div>
+                <span>${cat.name}</span>
+                <span style="font-size:0.7em; opacity:0.6; margin-left: 5px">(${cat.type === 'income' ? 'Ing.' : 'Gas.'})</span>
+                <div style="margin-left:auto; display:flex; gap:5px">
+                   <i class='bx bxs-pencil' style="opacity:0.3"></i>
+                   <i class='bx bx-trash delete-cat' style="opacity:0.3; color: #ef4444"></i>
+                </div>
+            `;
+            
+            el.querySelector('.delete-cat').onclick = (e) => {
+                e.stopPropagation();
+                 if(confirm('¿Borrar etiqueta?')) Logic.deleteCategory(cat.id);
+            };
+
+            if(cat.type === 'income') containerIncome.appendChild(el);
+            else containerExpense.appendChild(el);
+        });
+    },
 
     // --- MODALES DE EDICIÓN ---
-    // ... (openEditAccount unchanged) ...
-    // ... (openEditTransaction unchanged) ...
-    // ... (openEditCategory unchanged) ...
-    // ... (getAccountTypeName unchanged) ...
+    openEditAccount(acc) {
+        AppData.editingId = acc.id;
+        AppData.editingType = 'account';
+        
+        document.querySelector('#modal-account h2').textContent = 'Editar Cuenta';
+        document.getElementById('acc-name').value = acc.name;
+        document.getElementById('acc-type').value = acc.type;
+        document.getElementById('acc-balance').value = acc.balance;
+        document.getElementById('acc-balance').disabled = false; // Permitir editar balance para correcciones
+        document.getElementById('acc-color').value = acc.color;
+        
+        this.openModal(this.elements.modalAcc);
+    },
+
+    openEditTransaction(t) {
+        AppData.editingId = t.id;
+        AppData.editingType = 'transaction';
+
+        document.querySelector('#modal-transaction h2').textContent = 'Editar Movimiento';
+        
+        // Settear valores
+        const typeRadio = document.querySelector(`input[name="type"][value="${t.type}"]`);
+        if(typeRadio) {
+            typeRadio.checked = true;
+            // Disparar evento para actualizar selects
+            typeRadio.dispatchEvent(new Event('change'));
+        }
+        
+        document.getElementById('trans-amount').value = t.amount;
+        document.getElementById('trans-desc').value = t.description;
+        document.getElementById('trans-date').value = t.date;
+        
+        // Esperar un tick para que los selects se llenen
+        setTimeout(() => {
+            this.populateSelects(t.categoryId, t.accountId);
+        }, 0);
+
+        this.openModal(this.elements.modalTrans);
+    },
+
+    openEditCategory(cat) {
+        AppData.editingId = cat.id;
+        AppData.editingType = 'category';
+        
+        document.querySelector('#modal-category h2').textContent = 'Editar Etiqueta';
+        document.getElementById('cat-name').value = cat.name;
+        document.querySelector(`input[name="cat-type"][value="${cat.type}"]`).checked = true;
+        document.getElementById('cat-color').value = cat.color;
+        
+        this.openModal(this.elements.modalCat);
+    },
+
+    getAccountTypeName(type) {
+        const types = { 'cash': 'Efectivo', 'bank': 'Banco', 'credit': 'T. Crédito', 'saving': 'Ahorros' };
+        return types[type] || type;
+    }
 
 };
 
 // --- LOGICA CON FIREBASE ---
 const Logic = {
-    // ... (saveAccount, saveCategory, deleteCategory unchanged) ...
+    // CUENTAS
+    async saveAccount() {
+        const name = document.getElementById('acc-name').value;
+        const type = document.getElementById('acc-type').value;
+        const color = document.getElementById('acc-color').value;
+        const balanceInput = parseFloat(document.getElementById('acc-balance').value) || 0;
+
+        if (AppData.editingId) {
+            // Update (Incluyendo balance, permitiendo correcciones manuales)
+            const ref = doc(db, `users/${AppData.user.uid}/accounts`, AppData.editingId);
+            await updateDoc(ref, { name, type, color, balance: balanceInput });
+        } else {
+            // Create
+            await addDoc(collection(db, `users/${AppData.user.uid}/accounts`), {
+                name, type, balance: balanceInput, color, createdAt: new Date()
+            });
+        }
+    },
+
+    // CATEGORÍAS
+    async saveCategory() {
+        const name = document.getElementById('cat-name').value;
+        const type = document.querySelector('input[name="cat-type"]:checked').value;
+        const color = document.getElementById('cat-color').value;
+
+        if (AppData.editingId) {
+            await updateDoc(doc(db, `users/${AppData.user.uid}/categories`, AppData.editingId), {
+                name, type, color
+            });
+        } else {
+            await addDoc(collection(db, `users/${AppData.user.uid}/categories`), {
+                name, type, color
+            });
+        }
+    },
+
+    async deleteCategory(id) {
+        await deleteDoc(doc(db, `users/${AppData.user.uid}/categories`, id));
+    },
 
     // TRANSACCIONES UNIFICADA
     async saveTransaction() {
