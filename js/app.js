@@ -203,6 +203,13 @@ const UI = {
              this.openModal(this.elements.modalAcc);
         });
 
+        document.getElementById('btn-add-category').addEventListener('click', () => {
+             this.resetForm('form-category');
+             AppData.editingId = null;
+             document.querySelector('#modal-category h2').textContent = 'Nueva Etiqueta';
+             this.openModal(this.elements.modalCat);
+        });
+
         document.getElementById('btn-add-transfer').addEventListener('click', () => {
              this.resetForm('form-transfer');
              document.getElementById('transfer-date').value = new Date().toISOString().split('T')[0];
