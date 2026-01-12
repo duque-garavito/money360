@@ -320,8 +320,10 @@ const UI = {
             // Llenar Origen con cuentas normales
             AppData.accounts.forEach(acc => selSrc.add(createOption(acc)));
 
-            // Llenar Destino (Solo cuentas internas, según solicitud)
+            // Llenar Destino
+            const extDest = new Option('... fuera del sistema', 'external_dest');
             if(selDest) {
+                selDest.add(extDest);
                 AppData.accounts.forEach(acc => selDest.add(createOption(acc)));
             }
 
