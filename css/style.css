@@ -39,6 +39,11 @@ body {
     overflow-x: hidden;
 }
 
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
 /* Layout */
 .app-container {
     display: flex;
