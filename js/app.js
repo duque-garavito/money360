@@ -248,20 +248,20 @@ const UI = {
         typeRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const type = e.target.value;
-                const groupDest = document.getElementById('group-account-dest');
+                const groupNormalAccount = document.getElementById('group-normal-account');
+                const groupTransferFlow = document.getElementById('group-transfer-flow');
                 const groupCat = document.getElementById('group-category');
-                const lblSrc = document.getElementById('label-account-src');
 
                 if (type === 'transfer') {
-                    // Modo Transferencia
-                    groupDest.classList.remove('hidden');
+                    // Modo Transferencia - Mostrar interfaz visual Origen → Destino
+                    groupNormalAccount.classList.add('hidden');
+                    groupTransferFlow.classList.remove('hidden');
                     groupCat.classList.add('hidden');
-                    lblSrc.textContent = 'Origen';
                 } else {
-                    // Income / Expense
-                    groupDest.classList.add('hidden');
+                    // Income / Expense - Mostrar interfaz normal
+                    groupNormalAccount.classList.remove('hidden');
+                    groupTransferFlow.classList.add('hidden');
                     groupCat.classList.remove('hidden');
-                    lblSrc.textContent = 'Cuenta';
                 }
                 this.populateSelects();
             });
@@ -292,18 +292,10 @@ const UI = {
     },
 
     populateSelects(selectedCategoryId = null, selectedAccountId = null) {
-        // 1. Setup básico de selectores
-        const selSrc = document.getElementById('trans-account');
-        const selDest = document.getElementById('trans-account-to'); // Nuevo
-        
-        selSrc.innerHTML = '';
-        if(selDest) selDest.innerHTML = ''; // Limpiar si existe (a veces null si carga antes de tiempo)
-
         const typeEl = document.querySelector('input[name="type"]:checked');
         if(!typeEl) return;
         const type = typeEl.value;
 
-        // 2. Llenar Cuentas (Origen y Destino)
         // Función helper para crear opciones
         const createOption = (acc) => {
             const opt = document.createElement('option');
@@ -312,32 +304,38 @@ const UI = {
             return opt;
         };
 
-        // Opción "Externo" para modo Transferencia
         if(type === 'transfer') {
-            const extSrc = new Option('... fuera del sistema', 'external_source');
-            selSrc.add(extSrc);
+            // Modo Transferencia - Llenar selectores visuales Origen/Destino
+            const selFrom = document.getElementById('trans-from');
+            const selTo = document.getElementById('trans-to');
             
-            // Llenar Origen con cuentas normales
-            AppData.accounts.forEach(acc => selSrc.add(createOption(acc)));
-
-            // Llenar Destino
-            const extDest = new Option('... fuera del sistema', 'external_dest');
-            if(selDest) {
-                selDest.add(extDest);
-                AppData.accounts.forEach(acc => selDest.add(createOption(acc)));
+            if(selFrom && selTo) {
+                selFrom.innerHTML = '';
+                selTo.innerHTML = '';
+                
+                // Origen: Externo + Cuentas
+                const extSrc = new Option('... fuera del sistema', 'external_source');
+                selFrom.add(extSrc);
+                AppData.accounts.forEach(acc => selFrom.add(createOption(acc)));
+                
+                // Destino: Externo + Cuentas
+                const extDest = new Option('... fuera del sistema', 'external_dest');
+                selTo.add(extDest);
+                AppData.accounts.forEach(acc => selTo.add(createOption(acc)));
             }
-
         } else {
-             // Solo cuentas normales para Ingreso/Gasto normal
-             AppData.accounts.forEach(acc => {
-                const opt = createOption(acc);
-                if (acc.id === selectedAccountId) opt.selected = true;
-                selSrc.appendChild(opt);
-            });
-        }
-
-        // 3. Llenar Categorías (Solo si no es Transfer)
-        if (type !== 'transfer') {
+            // Modo Normal (Ingreso/Gasto) - Llenar selector de cuenta
+            const selAccount = document.getElementById('trans-account');
+            if(selAccount) {
+                selAccount.innerHTML = '';
+                AppData.accounts.forEach(acc => {
+                    const opt = createOption(acc);
+                    if (acc.id === selectedAccountId) opt.selected = true;
+                    selAccount.appendChild(opt);
+                });
+            }
+            
+            // Llenar Categorías
             this.elements.transCategorySel.innerHTML = '';
             const filteredCats = AppData.categories.filter(c => c.type === type);
             
@@ -620,38 +618,37 @@ const Logic = {
         const description = document.getElementById('trans-desc').value;
         const date = document.getElementById('trans-date').value;
         
-        // IDs
-        let accountId = document.getElementById('trans-account').value;
-        let categoryId = document.getElementById('trans-category').value;
-        const destAccountId = document.getElementById('trans-account-to') ? document.getElementById('trans-account-to').value : null;
-
         if (isNaN(amount) || amount <= 0) return alert("Monto inválido");
 
         // LÓGICA DE TRASPASO
         if (type === 'transfer') {
+            // Leer desde los nuevos selectores visuales
+            const fromId = document.getElementById('trans-from').value;
+            const toId = document.getElementById('trans-to').value;
             
             // Caso 1: Externo -> Cuenta Mía (Es un INGRESO)
-            if (accountId === 'external_source' && destAccountId !== 'external_dest') {
-                 // Convertir a Ingreso
-                 return this.saveDirectTransaction('income', amount, description, destAccountId, null, date); // Null category or default?
+            if (fromId === 'external_source' && toId !== 'external_dest') {
+                 return this.saveDirectTransaction('income', amount, description, toId, null, date);
             }
             
             // Caso 2: Cuenta Mía -> Externo (Es un GASTO)
-            if (accountId !== 'external_source' && destAccountId === 'external_dest') {
-                // Convertir a Gasto
-                return this.saveDirectTransaction('expense', amount, description, accountId, null, date); 
+            if (fromId !== 'external_source' && toId === 'external_dest') {
+                return this.saveDirectTransaction('expense', amount, description, fromId, null, date); 
             }
 
             // Caso 3: Cuenta Mía -> Cuenta Mía (TRASPASO REAL)
-            if (accountId !== 'external_source' && destAccountId !== 'external_dest') {
-                 if (accountId === destAccountId) return alert("Origen y Destino deben ser diferentes");
-                 return this.saveTransferLogic(accountId, destAccountId, amount, description, date);
+            if (fromId !== 'external_source' && toId !== 'external_dest') {
+                 if (fromId === toId) return alert("Origen y Destino deben ser diferentes");
+                 return this.saveTransferLogic(fromId, toId, amount, description, date);
             }
 
             return alert("Selección de transferencia inválida.");
         }
 
         // LÓGICA NORMAL (INGRESO / GASTO)
+        const accountId = document.getElementById('trans-account').value;
+        const categoryId = document.getElementById('trans-category').value;
+        
         if(!accountId) return alert('Selecciona una cuenta');
         this.saveDirectTransaction(type, amount, description, accountId, categoryId, date);
     },

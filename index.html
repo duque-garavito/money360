@@ -262,19 +262,44 @@
                     <input type="text" id="trans-desc" placeholder="¿De qué es este movimiento?">
                 </div>
 
-                <!-- Selección de Cuentas -->
-                <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label id="label-account-src">Cuenta</label>
-                        <select id="trans-account" required></select>
+                <!-- Selección NORMAL (Ingreso/Gasto) -->
+                <div id="group-normal-account" class="form-group">
+                    <label>Cuenta</label>
+                    <select id="trans-account" required></select>
+                </div>
+
+                <!-- Selección TRASPASO (Origen → Destino) -->
+                <div id="group-transfer-flow" class="hidden" style="margin: 20px 0;">
+                    <div style="display: flex; gap: 15px; align-items: center; justify-content: center;">
+                        <div style="flex: 1; text-align: center;">
+                            <label style="display: block; font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">
+                                <i class='bx bx-export' style="margin-right: 4px;"></i>Origen
+                            </label>
+                            <select id="trans-from" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 0.95rem;"></select>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <i class='bx bx-right-arrow-alt' style="font-size: 2rem; color: var(--primary-color);"></i>
+                        </div>
+                        
+                        <div style="flex: 1; text-align: center;">
+                            <label style="display: block; font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">
+                                <i class='bx bx-import' style="margin-right: 4px;"></i>Destino
+                            </label>
+                            <select id="trans-to" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 0.95rem;"></select>
+                        </div>
                     </div>
                     
-                    <div class="form-group hidden" id="group-account-dest">
-                        <label>Destino</label>
-                        <select id="trans-account-to"></select>
+                    <!-- Info Helper -->
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--primary-color); border-radius: 6px; font-size: 0.8rem; color: var(--text-secondary);">
+                        <i class='bx bx-info-circle' style="margin-right: 4px;"></i>
+                        <strong>Fuera del sistema → Cuenta:</strong> Ingreso · 
+                        <strong>Cuenta → Fuera del sistema:</strong> Gasto · 
+                        <strong>Cuenta → Cuenta:</strong> Traspaso
                     </div>
                 </div>
 
+                <!-- Categoría (Solo para Ingreso/Gasto) -->
                 <div class="form-group" id="group-category">
                     <label>Etiqueta/Categoría</label>
                     <select id="trans-category"></select>
