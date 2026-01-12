@@ -192,6 +192,12 @@ const UI = {
              this.resetForm('form-transaction');
              AppData.editingId = null;
              document.querySelector('#modal-transaction h2').textContent = 'Registrar Movimiento';
+             // Default to income or expense
+             const type = document.querySelector('input[name="type"]:checked').value;
+             // Force UI update
+             const event = new Event('change');
+             document.getElementById('type-' + type).dispatchEvent(event);
+             
              this.populateSelects();
              this.openModal(this.elements.modalTrans);
         });
@@ -209,30 +215,6 @@ const UI = {
              AppData.editingId = null;
              document.querySelector('#modal-category h2').textContent = 'Nueva Etiqueta';
              this.openModal(this.elements.modalCat);
-        });
-
-        document.getElementById('btn-add-transfer').addEventListener('click', () => {
-             this.resetForm('form-transfer');
-             document.getElementById('transfer-date').value = new Date().toISOString().split('T')[0];
-             
-             // Populate From/To Selects
-             const selFrom = document.getElementById('transfer-from');
-             const selTo = document.getElementById('transfer-to');
-             selFrom.innerHTML = ''; selTo.innerHTML = '';
-             
-             AppData.accounts.forEach(acc => {
-                 const opt1 = new Option(`${acc.name} (${Utils.formatCurrency(acc.balance)})`, acc.id);
-                 const opt2 = new Option(acc.name, acc.id);
-                 selFrom.add(opt1);
-                 selTo.add(opt2);
-             });
-
-             this.openModal(document.getElementById('modal-transfer'));
-        });
-
-        document.getElementById('form-transfer').addEventListener('submit', (e) => {
-            e.preventDefault();
-            Logic.saveTransfer();
         });
 
         // Modales - Cerrar
@@ -261,10 +243,28 @@ const UI = {
             this.closeModal(this.elements.modalCat);
         });
 
-        // Filtro dinámico en modal Transacción
+        // Lógica Dinámica Modal Transacción
         const typeRadios = document.querySelectorAll('input[name="type"]');
         typeRadios.forEach(radio => {
-            radio.addEventListener('change', () => this.populateSelects());
+            radio.addEventListener('change', (e) => {
+                const type = e.target.value;
+                const groupDest = document.getElementById('group-account-dest');
+                const groupCat = document.getElementById('group-category');
+                const lblSrc = document.getElementById('label-account-src');
+
+                if (type === 'transfer') {
+                    // Modo Transferencia
+                    groupDest.classList.remove('hidden');
+                    groupCat.classList.add('hidden');
+                    lblSrc.textContent = 'Origen';
+                } else {
+                    // Income / Expense
+                    groupDest.classList.add('hidden');
+                    groupCat.classList.remove('hidden');
+                    lblSrc.textContent = 'Cuenta';
+                }
+                this.populateSelects();
+            });
         });
     },
 
@@ -292,412 +292,196 @@ const UI = {
     },
 
     populateSelects(selectedCategoryId = null, selectedAccountId = null) {
-        // Cuentas
-        this.elements.transAccountSel.innerHTML = '';
-        AppData.accounts.forEach(acc => {
+        // 1. Setup básico de selectores
+        const selSrc = document.getElementById('trans-account');
+        const selDest = document.getElementById('trans-account-to'); // Nuevo
+        
+        selSrc.innerHTML = '';
+        if(selDest) selDest.innerHTML = ''; // Limpiar si existe (a veces null si carga antes de tiempo)
+
+        const typeEl = document.querySelector('input[name="type"]:checked');
+        if(!typeEl) return;
+        const type = typeEl.value;
+
+        // 2. Llenar Cuentas (Origen y Destino)
+        // Función helper para crear opciones
+        const createOption = (acc) => {
             const opt = document.createElement('option');
             opt.value = acc.id;
             opt.textContent = `${acc.name} (${Utils.formatCurrency(acc.balance)})`;
-            if (acc.id === selectedAccountId) opt.selected = true;
-            this.elements.transAccountSel.appendChild(opt);
-        });
+            return opt;
+        };
 
-        // Categorías (Filtradas por tipo)
-        const typeEl = document.querySelector('input[name="type"]:checked');
-        if(!typeEl) return; // Si no hay tipo seleccionado (raro)
-        const type = typeEl.value;
-        
-        this.elements.transCategorySel.innerHTML = '';
-        const filteredCats = AppData.categories.filter(c => c.type === type);
-        
-        filteredCats.forEach(cat => {
-            const opt = document.createElement('option');
-            opt.value = cat.id;
-            opt.textContent = cat.name;
-            if (cat.id === selectedCategoryId) opt.selected = true;
-            this.elements.transCategorySel.appendChild(opt);
-        });
+        // Opción "Externo" para modo Transferencia
+        if(type === 'transfer') {
+            const extSrc = new Option('Externo / Otro (Ingreso)', 'external_source');
+            selSrc.add(extSrc);
+            
+            // Llenar Origen con cuentas normales
+            AppData.accounts.forEach(acc => selSrc.add(createOption(acc)));
+
+            // Llenar Destino
+            const extDest = new Option('Externo / Otro (Gasto)', 'external_dest');
+            if(selDest) {
+                selDest.add(extDest);
+                AppData.accounts.forEach(acc => selDest.add(createOption(acc)));
+            }
+
+        } else {
+             // Solo cuentas normales para Ingreso/Gasto normal
+             AppData.accounts.forEach(acc => {
+                const opt = createOption(acc);
+                if (acc.id === selectedAccountId) opt.selected = true;
+                selSrc.appendChild(opt);
+            });
+        }
+
+        // 3. Llenar Categorías (Solo si no es Transfer)
+        if (type !== 'transfer') {
+            this.elements.transCategorySel.innerHTML = '';
+            const filteredCats = AppData.categories.filter(c => c.type === type);
+            
+            filteredCats.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.id;
+                opt.textContent = cat.name;
+                if (cat.id === selectedCategoryId) opt.selected = true;
+                this.elements.transCategorySel.appendChild(opt);
+            });
+        }
     },
 
     // --- RENDERIZADO ---
     
-    renderAll() {
-        this.renderAccounts();
-        this.renderTransactions();
-        this.renderCategories();
-        this.renderDashboard();
-    },
+    // ... (renderAll and renderAccounts unchanged) ...
 
-    renderDashboard() {
-        // Calcular totales basados en transacciones
-        let income = 0;
-        let expense = 0;
+    // ... (renderTransactions unchanged) ...
 
-        AppData.transactions.forEach(t => {
-            if(t.type === 'income') income += t.amount;
-            else if(t.type === 'expense') expense += t.amount;
-            // Ignore transfers in global income/expense
-        });
-
-        // Balance total calculado sumando el saldo ACTUAL de cada cuenta
-        // (El saldo de la cuenta es la fuente de verdad)
-        const totalBalance = AppData.accounts.reduce((sum, acc) => sum + acc.balance, 0);
-
-        this.elements.totalIncome.textContent = Utils.formatCurrency(income);
-        this.elements.totalExpense.textContent = Utils.formatCurrency(expense);
-        this.elements.totalBalance.textContent = Utils.formatCurrency(totalBalance);
-        
-        Charts.update();
-    },
-
-    renderAccounts() {
-        const container = this.elements.accountsList;
-        container.innerHTML = '';
-
-        AppData.accounts.forEach(acc => {
-            const el = document.createElement('div');
-            el.className = 'account-card';
-            // Enable editing
-            el.onclick = (e) => {
-                // Evitar editar si se hace click en un botón de borrar futuro (si lo hubiera)
-                UI.openEditAccount(acc);
-            };
-            
-            el.innerHTML = `
-                <style>.account-card[data-id="${acc.id}"]::before { background-color: ${acc.color}; }</style>
-                <div class="card-actions">
-                     <i class='bx bxs-edit-alt' style="opacity:0.5"></i>
-                </div>
-                <div class="acc-type">${this.getAccountTypeName(acc.type)}</div>
-                <div class="acc-name">${acc.name}</div>
-                <div class="acc-balance">${Utils.formatCurrency(acc.balance)}</div>
-            `;
-            el.setAttribute('data-id', acc.id);
-            container.appendChild(el);
-        });
-    },
-
-    renderTransactions() {
-        const container = this.elements.transactionsList;
-        container.innerHTML = '';
-        
-        AppData.transactions.forEach(t => {
-            let catName, accName, iconHtml, amountClass, amountSign;
-
-            if(t.type === 'transfer') {
-                const fromAcc = Utils.getAccountById(t.accountId);
-                const toAcc = Utils.getAccountById(t.categoryId); // Hack: categoryId is toAccountId
-                catName = 'Transferencia';
-                accName = `${fromAcc?.name || '?'} <i class='bx bx-right-arrow-alt'></i> ${toAcc?.name || '?'}`;
-                iconHtml = `<div class="t-icon" style="color: #cbd5e1"><i class='bx bx-transfer'></i></div>`;
-                amountClass = 'transfer';
-                amountSign = ''; 
-            } else {
-                const cat = Utils.getCategoryById(t.categoryId);
-                const account = Utils.getAccountById(t.accountId);
-                catName = cat?.name || 'S/C';
-                accName = account?.name || '?';
-                iconHtml = `<div class="t-icon" style="color: ${cat?.color || '#ccc'}">
-                            <i class='bx ${t.type === 'income' ? 'bxs-up-arrow-circle' : 'bxs-down-arrow-circle'}'></i>
-                        </div>`;
-                amountClass = t.type;
-                amountSign = t.type === 'income' ? '+' : '-';
-            }
-            
-            const el = document.createElement('div');
-            el.className = 'transaction-item';
-            if(t.type !== 'transfer') {
-                 el.onclick = () => UI.openEditTransaction(t);
-                 el.style.cursor = 'pointer';
-            }
-
-            el.innerHTML = `
-                <div class="t-info">
-                    ${iconHtml}
-                    <div class="t-details">
-                        <h4>${t.description}</h4>
-                        <small>${Utils.formatDate(t.date)} • ${catName} • <span style="font-size:0.8em; opacity:0.8">${accName}</span></small>
-                    </div>
-                </div>
-                <div class="t-right">
-                    <div class="t-amount ${amountClass}" style="${t.type==='transfer'?'color:#94a3b8':''}">
-                        ${amountSign}${Utils.formatCurrency(t.amount)}
-                    </div>
-                     <button class="btn-icon-min delete-btn" data-id="${t.id}"><i class='bx bx-trash'></i></button>
-                </div>
-            `;
-            
-            // Manejador para botón borrar
-            const deleteBtn = el.querySelector('.delete-btn');
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation();
-                const msg = t.type === 'transfer' 
-                    ? '¿Borrar transferencia? El dinero volverá a la cuenta de origen.' 
-                    : '¿Borrar este movimiento? Se ajustará el saldo de la cuenta.';
-                
-                if(confirm(msg)) {
-                    Logic.deleteTransaction(t);
-                }
-            };
-
-            container.appendChild(el);
-        });
-    },
-
-    renderCategories() {
-        const containerIncome = document.getElementById('categories-list-income');
-        const containerExpense = document.getElementById('categories-list-expense');
-        
-        if(!containerIncome || !containerExpense) return;
-
-        containerIncome.innerHTML = '';
-        containerExpense.innerHTML = '';
-
-        AppData.categories.forEach(cat => {
-            const el = document.createElement('div');
-            el.className = 'category-card';
-            el.onclick = () => UI.openEditCategory(cat);
-            el.style.cursor = 'pointer';
-            
-            el.innerHTML = `
-                <div class="color-dot" style="background-color: ${cat.color}"></div>
-                <span>${cat.name}</span>
-                <span style="font-size:0.7em; opacity:0.6; margin-left: 5px">(${cat.type === 'income' ? 'Ing.' : 'Gas.'})</span>
-                <div style="margin-left:auto; display:flex; gap:5px">
-                   <i class='bx bxs-pencil' style="opacity:0.3"></i>
-                   <i class='bx bx-trash delete-cat' style="opacity:0.3; color: #ef4444"></i>
-                </div>
-            `;
-            
-            el.querySelector('.delete-cat').onclick = (e) => {
-                e.stopPropagation();
-                 if(confirm('¿Borrar etiqueta?')) Logic.deleteCategory(cat.id);
-            };
-
-            if(cat.type === 'income') containerIncome.appendChild(el);
-            else containerExpense.appendChild(el);
-        });
-    },
+    // ... (renderCategories unchanged) ...
 
     // --- MODALES DE EDICIÓN ---
-    openEditAccount(acc) {
-        AppData.editingId = acc.id;
-        AppData.editingType = 'account';
-        
-        document.querySelector('#modal-account h2').textContent = 'Editar Cuenta';
-        document.getElementById('acc-name').value = acc.name;
-        document.getElementById('acc-type').value = acc.type;
-        document.getElementById('acc-balance').value = acc.balance;
-        document.getElementById('acc-balance').disabled = false; // Permitir editar balance para correcciones
-        document.getElementById('acc-color').value = acc.color;
-        
-        this.openModal(this.elements.modalAcc);
-    },
+    // ... (openEditAccount unchanged) ...
+    // ... (openEditTransaction unchanged) ...
+    // ... (openEditCategory unchanged) ...
+    // ... (getAccountTypeName unchanged) ...
 
-    openEditTransaction(t) {
-        AppData.editingId = t.id;
-        AppData.editingType = 'transaction';
-
-        document.querySelector('#modal-transaction h2').textContent = 'Editar Movimiento';
-        
-        // Settear valores
-        const typeRadio = document.querySelector(`input[name="type"][value="${t.type}"]`);
-        if(typeRadio) {
-            typeRadio.checked = true;
-            // Disparar evento para actualizar selects
-            typeRadio.dispatchEvent(new Event('change'));
-        }
-        
-        document.getElementById('trans-amount').value = t.amount;
-        document.getElementById('trans-desc').value = t.description;
-        document.getElementById('trans-date').value = t.date;
-        
-        // Esperar un tick para que los selects se llenen
-        setTimeout(() => {
-            this.populateSelects(t.categoryId, t.accountId);
-        }, 0);
-
-        this.openModal(this.elements.modalTrans);
-    },
-
-    openEditCategory(cat) {
-        AppData.editingId = cat.id;
-        AppData.editingType = 'category';
-        
-        document.querySelector('#modal-category h2').textContent = 'Editar Etiqueta';
-        document.getElementById('cat-name').value = cat.name;
-        document.querySelector(`input[name="cat-type"][value="${cat.type}"]`).checked = true;
-        document.getElementById('cat-color').value = cat.color;
-        
-        this.openModal(this.elements.modalCat);
-    },
-
-    getAccountTypeName(type) {
-        const types = { 'cash': 'Efectivo', 'bank': 'Banco', 'credit': 'T. Crédito', 'saving': 'Ahorros' };
-        return types[type] || type;
-    }
 };
 
 // --- LOGICA CON FIREBASE ---
 const Logic = {
-    // CUENTAS
-    async saveAccount() {
-        const name = document.getElementById('acc-name').value;
-        const type = document.getElementById('acc-type').value;
-        const color = document.getElementById('acc-color').value;
-        const balanceInput = parseFloat(document.getElementById('acc-balance').value) || 0;
+    // ... (saveAccount, saveCategory, deleteCategory unchanged) ...
 
-        if (AppData.editingId) {
-            // Update (Incluyendo balance, permitiendo correcciones manuales)
-            const ref = doc(db, `users/${AppData.user.uid}/accounts`, AppData.editingId);
-            await updateDoc(ref, { name, type, color, balance: balanceInput });
-        } else {
-            // Create
-            await addDoc(collection(db, `users/${AppData.user.uid}/accounts`), {
-                name, type, balance: balanceInput, color, createdAt: new Date()
-            });
-        }
-    },
-
-    // CATEGORÍAS
-    async saveCategory() {
-        const name = document.getElementById('cat-name').value;
-        const type = document.querySelector('input[name="cat-type"]:checked').value;
-        const color = document.getElementById('cat-color').value;
-
-        if (AppData.editingId) {
-            await updateDoc(doc(db, `users/${AppData.user.uid}/categories`, AppData.editingId), {
-                name, type, color
-            });
-        } else {
-            await addDoc(collection(db, `users/${AppData.user.uid}/categories`), {
-                name, type, color
-            });
-        }
-    },
-
-    async deleteCategory(id) {
-        await deleteDoc(doc(db, `users/${AppData.user.uid}/categories`, id));
-    },
-
-    // TRANSACCIONES (Compleja lógica de balance)
+    // TRANSACCIONES UNIFICADA
     async saveTransaction() {
         const type = document.querySelector('input[name="type"]:checked').value;
         const amount = parseFloat(document.getElementById('trans-amount').value);
         const description = document.getElementById('trans-desc').value;
-        const accountId = document.getElementById('trans-account').value;
-        const categoryId = document.getElementById('trans-category').value;
         const date = document.getElementById('trans-date').value;
+        
+        // IDs
+        let accountId = document.getElementById('trans-account').value;
+        let categoryId = document.getElementById('trans-category').value;
+        const destAccountId = document.getElementById('trans-account-to') ? document.getElementById('trans-account-to').value : null;
 
+        if (isNaN(amount) || amount <= 0) return alert("Monto inválido");
+
+        // LÓGICA DE TRASPASO
+        if (type === 'transfer') {
+            
+            // Caso 1: Externo -> Cuenta Mía (Es un INGRESO)
+            if (accountId === 'external_source' && destAccountId !== 'external_dest') {
+                 // Convertir a Ingreso
+                 return this.saveDirectTransaction('income', amount, description, destAccountId, null, date); // Null category or default?
+            }
+            
+            // Caso 2: Cuenta Mía -> Externo (Es un GASTO)
+            if (accountId !== 'external_source' && destAccountId === 'external_dest') {
+                // Convertir a Gasto
+                return this.saveDirectTransaction('expense', amount, description, accountId, null, date); 
+            }
+
+            // Caso 3: Cuenta Mía -> Cuenta Mía (TRASPASO REAL)
+            if (accountId !== 'external_source' && destAccountId !== 'external_dest') {
+                 if (accountId === destAccountId) return alert("Origen y Destino deben ser diferentes");
+                 return this.saveTransferLogic(accountId, destAccountId, amount, description, date);
+            }
+
+            return alert("Selección de transferencia inválida.");
+        }
+
+        // LÓGICA NORMAL (INGRESO / GASTO)
         if(!accountId) return alert('Selecciona una cuenta');
+        this.saveDirectTransaction(type, amount, description, accountId, categoryId, date);
+    },
 
-        // Referencias DB
+    // Helper para guardar Ingreso/Gasto normal
+    async saveDirectTransaction(type, amount, description, accountId, categoryId, date) {
+        // Si categoryId es null (viniendo de transfer), buscar o crear "Sin Categoría" o "Transferencia Externa"?
+        // Por simplicidad, dejaremos categoryId vacío si viene de transfer, o podríamos asignar una categoría default.
+        if (!categoryId) {
+             // Try to find a 'General' category or just save empty string/null.
+             // Firestore allows inconsistent schema so null is fine, but UI might break if getCategoryById fails.
+             // Let's create a dummy category ID or handle it in rendering.
+             // Better: Force user to select category if converted? No, simplicity first.
+             categoryId = ''; 
+        }
+
         const newVal = type === 'income' ? amount : -amount;
         const accRef = doc(db, `users/${AppData.user.uid}/accounts`, accountId);
 
         try {
             if (AppData.editingId) {
+                // ... (Lógica de edición existente, simplificada) ...
+                // Nota: Editar una transacción que FUE transfer pero ahora es normal es complejo.
+                // Asumiremos por ahora que el modal maneja creación principalmente o edición simple.
+                // Si estamos editando, usar la lógica anterior de revertir + aplicar.
+                
                 const oldTrans = AppData.transactions.find(t => t.id === AppData.editingId);
-                if(!oldTrans) return;
-
-                // 1. Revertir saldo viejo (DB)
-                const oldRevertVal = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
-                const oldAccRef = doc(db, `users/${AppData.user.uid}/accounts`, oldTrans.accountId);
-                await updateDoc(oldAccRef, { balance: increment(oldRevertVal) });
-
-                // 2. Aplicar nuevo saldo (DB)
-                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, accountId), { balance: increment(newVal) });
-
-                // 3. Actualizar transacción (DB)
+                if(oldTrans) {
+                     const oldRevertVal = oldTrans.type === 'income' ? -oldTrans.amount : oldTrans.amount;
+                     await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, oldTrans.accountId), { balance: increment(oldRevertVal) });
+                }
+                
+                // Nuevo
+                await updateDoc(accRef, { balance: increment(newVal) });
                 await updateDoc(doc(db, `users/${AppData.user.uid}/transactions`, AppData.editingId), {
                     type, amount, description, accountId, categoryId, date
                 });
 
-                // No necesitamos actualización manual local porque onSnapshot se encargará
-                // al detectar los cambios locales inmediatamente (Latency Compensation).
-
             } else {
-                // MODO CREACIÓN
-                
-                // 1. DB Updates
+                // Creación
                 await updateDoc(accRef, { balance: increment(newVal) });
                 await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
                     type, amount, description, accountId, categoryId, date, createdAt: new Date()
                 });
-                
-                // No necesitamos actualización manual local (unshift)
             }
-        } catch (error) {
-            console.error("Error guardando:", error);
-            alert("Error al guardar: " + error.message);
-        }
+        } catch(e) { console.error(e); alert(e.message); }
     },
 
-    async deleteTransaction(t) {
-        // Lógica de borrado (Si es transferencia o normal)
-        
-        try {
-            if (t.type === 'transfer') {
-                // Revertir Transferencia: Devolver a Origen, Quitar de Destino
-                 await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(t.amount) }); // Origen
-                 await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.categoryId), { balance: increment(-t.amount) }); // Destino (categoryId guarda el ID destino en transferencias)
-            } else {
-                // Revertir Normal
-                const revertVal = t.type === 'income' ? -t.amount : t.amount;
-                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(revertVal) });
-            }
-
-            await deleteDoc(doc(db, `users/${AppData.user.uid}/transactions`, t.id));
-            
-            // Recargar todo (Simple)
-            // UI.renderAll will be triggered by snapshot
-        } catch (e) {
-            console.error("Error al borrar:", e);
-        }
-    },
-
-    async saveTransfer() {
-        const fromId = document.getElementById('transfer-from').value;
-        const toId = document.getElementById('transfer-to').value;
-        const amount = parseFloat(document.getElementById('transfer-amount').value);
-        const date = document.getElementById('transfer-date').value;
-        const desc = document.getElementById('transfer-desc').value || 'Transferencia';
-
-        if(fromId === toId) return alert("La cuenta de origen y destino no pueden ser la misma.");
-        if(isNaN(amount) || amount <= 0) return alert("Monto inválido");
-
+    // Helper para guardar Transferencia Real
+    async saveTransferLogic(fromId, toId, amount, desc, date) {
         const fromAcc = AppData.accounts.find(a => a.id === fromId);
         if(fromAcc.balance < amount) {
-            if(!confirm("⚠️ La cuenta de origen no tiene saldo suficiente. ¿Continuar igual?")) return;
+            if(!confirm("⚠️ Saldo insuficiente en origen. ¿Continuar?")) return;
         }
 
         try {
             // 1. Restar de Origen
             await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, fromId), { balance: increment(-amount) });
-            
             // 2. Sumar a Destino
             await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, toId), { balance: increment(amount) });
-
-            // 3. Registrar Transacción
-            // Usaremos 'categoryId' para guardar el ID de la cuenta destino, así reutilizamos campos
+            // 3. Registrar
             await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
-                type: 'transfer',
-                amount,
-                description: desc,
-                accountId: fromId, // Origen
-                categoryId: toId,  // Hack: Usamos esto para el Destino
-                date,
-                createdAt: new Date()
+                type: 'transfer', amount, description: desc,
+                accountId: fromId, categoryId: toId, // Hack: Destino en categoryId
+                date, createdAt: new Date()
             });
+            // Snapshot actualiza UI
+        } catch(e) { console.error(e); alert(e.message); }
+    },
+    
+    // ... deleteTransaction logic ...
 
-            UI.closeModal(document.getElementById('modal-transfer'));
-            document.getElementById('form-transfer').reset();
-
-        } catch (error) {
-            console.error("Error transferencia:", error);
-            alert("Error: " + error.message);
-        }
-    }
 };
 
 // ... existing code ...

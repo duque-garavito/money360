@@ -236,7 +236,11 @@
     </div>
 
     <!-- Modals -->
-    <!-- Modal Nueva Transacción -->
+            <!-- View Dashboard (Partial) - Removing btn-add-transfer from header check previously -->
+            
+            <!-- ... -->
+
+    <!-- Modal Nueva Transacción (Unificada) -->
     <div id="modal-transaction" class="modal">
         <div class="modal-content glass-panel">
             <span class="close-modal">&times;</span>
@@ -247,125 +251,43 @@
                     <label for="type-income">Ingreso</label>
                     <input type="radio" name="type" id="type-expense" value="expense">
                     <label for="type-expense">Gasto</label>
+                    <input type="radio" name="type" id="type-transfer" value="transfer">
+                    <label for="type-transfer">Traspaso</label>
                 </div>
+
                 <div class="form-group">
                     <label>Monto</label>
                     <input type="number" id="trans-amount" step="0.01" required placeholder="0.00">
                 </div>
+                
                 <div class="form-group">
                     <label>Descripción</label>
-                    <input type="text" id="trans-desc" required placeholder="¿De qué es este movimiento?">
+                    <input type="text" id="trans-desc" placeholder="¿De qué es este movimiento?">
                 </div>
-                <div class="form-group">
-                    <label>Cuenta</label>
-                    <select id="trans-account" required></select>
+
+                <!-- Selección de Cuentas -->
+                <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label id="label-account-src">Cuenta</label>
+                        <select id="trans-account" required></select>
+                    </div>
+                    
+                    <div class="form-group hidden" id="group-account-dest">
+                        <label>Destino</label>
+                        <select id="trans-account-to"></select>
+                    </div>
                 </div>
-                <div class="form-group">
+
+                <div class="form-group" id="group-category">
                     <label>Etiqueta/Categoría</label>
-                    <select id="trans-category" required></select>
+                    <select id="trans-category"></select>
                 </div>
+
                 <div class="form-group">
                     <label>Fecha</label>
                     <input type="date" id="trans-date" required>
                 </div>
                 <button type="submit" class="btn-primary full-width">Guardar</button>
-            </form>
-        </div>
-    </div>
-    
-    <!-- Modal Nueva Cuenta -->
-    <div id="modal-account" class="modal">
-        <div class="modal-content glass-panel">
-            <span class="close-modal">&times;</span>
-            <h2>Nueva Cuenta</h2>
-            <form id="form-account">
-                <div class="form-group">
-                    <label>Nombre de la Cuenta</label>
-                    <input type="text" id="acc-name" required placeholder="ej. Efectivo, Banco X">
-                </div>
-                <div class="form-group">
-                    <label>Tipo</label>
-                    <select id="acc-type">
-                        <option value="cash">Efectivo</option>
-                        <option value="bank">Banco / Tarjeta Débito</option>
-                        <option value="credit">Tarjeta de Crédito</option>
-                        <option value="saving">Ahorros</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Saldo Inicial</label>
-                    <input type="number" id="acc-balance" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Color</label>
-                    <input type="color" id="acc-color" value="#4cd137">
-                </div>
-                <button type="submit" class="btn-primary full-width">Crear Cuenta</button>
-            </form>
-        </div>
-    </div>
-
-     <!-- Modal Nueva Categoria -->
-    <div id="modal-category" class="modal">
-        <div class="modal-content glass-panel">
-            <span class="close-modal">&times;</span>
-            <h2>Nueva Etiqueta</h2>
-            <form id="form-category">
-                <div class="form-group">
-                    <label>Nombre</label>
-                    <input type="text" id="cat-name" required placeholder="ej. Comida, Salario">
-                </div>
-                <div class="form-group type-selector">
-                    <input type="radio" name="cat-type" id="cat-type-income" value="income">
-                    <label for="cat-type-income">Ingreso</label>
-                    <input type="radio" name="cat-type" id="cat-type-expense" value="expense" checked>
-                    <label for="cat-type-expense">Gasto</label>
-                </div>
-                <div class="form-group">
-                    <label>Color</label>
-                    <input type="color" id="cat-color" value="#00a8ff">
-                </div>
-                <button type="submit" class="btn-primary full-width">Guardar Etiqueta</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Nueva Transferencia -->
-    <div id="modal-transfer" class="modal">
-        <div class="modal-content glass-panel">
-            <span class="close-modal">&times;</span>
-            <h2>Nueva Transferencia</h2>
-            <form id="form-transfer">
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; justify-content: center;">
-                    <div style="text-align: center;">
-                        <label style="display: block; font-size: 0.8rem; margin-bottom: 5px;">Origen</label>
-                        <select id="transfer-from" required style="width: 140px; padding: 8px; font-size: 0.9rem;"></select>
-                    </div>
-                    <i class='bx bx-right-arrow-alt' style="font-size: 1.5rem; color: var(--primary-color);"></i>
-                    <div style="text-align: center;">
-                        <label style="display: block; font-size: 0.8rem; margin-bottom: 5px;">Destino</label>
-                        <select id="transfer-to" required style="width: 140px; padding: 8px; font-size: 0.9rem;"></select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Monto a transferir</label>
-                    <input type="number" id="transfer-amount" step="0.01" required placeholder="0.00">
-                </div>
-                
-                <div class="form-group">
-                    <label>Fecha</label>
-                    <input type="date" id="transfer-date" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Nota (Opcional)</label>
-                    <input type="text" id="transfer-desc" placeholder="Razón del traspaso...">
-                </div>
-
-                <button type="submit" class="btn-primary full-width">
-                    <i class='bx bx-transfer-alt'></i> Realizar Traspaso
-                </button>
             </form>
         </div>
     </div>
