@@ -30,7 +30,8 @@ const AppData = {
     transactions: [],
     categories: [],
     editingId: null, // ID del elemento que se está editando
-    editingType: null // 'account', 'transaction', 'category'
+    editingType: null, // 'account', 'transaction', 'category'
+    listeners: [] // Listeners activos de Firebase
 };
 
 // --- UTILIDADES ---
@@ -612,42 +613,19 @@ const Logic = {
                     type, amount, description, accountId, categoryId, date
                 });
 
-                // --- ACTUALIZACIÓN OPTIMISTA LOCAL ---
-                // Revertir en memoria local
-                const localOldAcc = AppData.accounts.find(a => a.id === oldTrans.accountId);
-                if(localOldAcc) {
-                    localOldAcc.balance += oldRevertVal;
-                }
-                // Aplicar nuevo en memoria local
-                const localNewAcc = AppData.accounts.find(a => a.id === accountId);
-                if(localNewAcc) {
-                    localNewAcc.balance += newVal;
-                }
-                // Actualizar trans local
-                Object.assign(oldTrans, { type, amount, description, accountId, categoryId, date });
-                
-                UI.renderAll(); 
+                // No necesitamos actualización manual local porque onSnapshot se encargará
+                // al detectar los cambios locales inmediatamente (Latency Compensation).
 
             } else {
                 // MODO CREACIÓN
                 
                 // 1. DB Updates
                 await updateDoc(accRef, { balance: increment(newVal) });
-                const newDocRef = await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
+                await addDoc(collection(db, `users/${AppData.user.uid}/transactions`), {
                     type, amount, description, accountId, categoryId, date, createdAt: new Date()
                 });
-
-                // 2. --- ACTUALIZACIÓN OPTIMISTA LOCAL ---
-                const localAcc = AppData.accounts.find(a => a.id === accountId);
-                if(localAcc) {
-                    localAcc.balance += newVal;
-                }
-                // Agregar transacción ficticia local para que se vea ya
-                AppData.transactions.unshift({
-                    id: newDocRef.id, type, amount, description, accountId, categoryId, date, createdAt: new Date()
-                });
-
-                UI.renderAll();
+                
+                // No necesitamos actualización manual local (unshift)
             }
         } catch (error) {
             console.error("Error guardando:", error);
@@ -919,7 +897,7 @@ onAuthStateChanged(auth, (user) => {
         const loadCollection = (colName, targetArray) => {
             try {
                 const q = collection(db, `users/${user.uid}/${colName}`);
-                onSnapshot(q, (snap) => {
+                const unsub = onSnapshot(q, (snap) => {
                     AppData[targetArray] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     if(colName === 'transactions') {
                          AppData.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -929,6 +907,7 @@ onAuthStateChanged(auth, (user) => {
                      console.error("Error acceso datos:", error);
                      if(colName === 'accounts') alert("⚠️ Error de Permisos: No olvides pegar las reglas en Firebase Console.");
                 });
+                if(AppData.listeners) AppData.listeners.push(unsub);
             } catch (e) { console.error(e); }
         };
 
@@ -939,6 +918,13 @@ onAuthStateChanged(auth, (user) => {
     } else {
         // Usuario NO Logueado
         loginOverlay.style.display = 'flex'; // Mostrar login
+        
+        // Desuscribir listeners anteriores para evitar mezclas o fugas de memoria
+        if(AppData.listeners) {
+            AppData.listeners.forEach(unsub => unsub());
+            AppData.listeners = [];
+        }
+
         // Limpiar datos en memoria por seguridad
         AppData.accounts = [];
         AppData.transactions = [];
