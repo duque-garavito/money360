@@ -934,6 +934,10 @@ onAuthStateChanged(auth, (user) => {
             mailEl.innerText = user.email || 'Anónimo';
         }
 
+        // Ocultar Login y mostrar App
+        const loginOverlay = document.getElementById('login-overlay');
+        if(loginOverlay) loginOverlay.style.display = 'none';
+
         // Cargar Datos
         const loadCollection = (colName, targetArray) => {
             try {
@@ -958,7 +962,8 @@ onAuthStateChanged(auth, (user) => {
 
     } else {
         // Usuario NO Logueado
-        loginOverlay.style.display = 'flex'; // Mostrar login
+        const loginOverlay = document.getElementById('login-overlay');
+        if(loginOverlay) loginOverlay.style.display = 'flex'; // Mostrar login
         
         // Desuscribir listeners anteriores para evitar mezclas o fugas de memoria
         if(AppData.listeners) {
