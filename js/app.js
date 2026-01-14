@@ -921,6 +921,13 @@ onAuthStateChanged(auth, (user) => {
         const nameEl = document.querySelector('.user-profile .user-info span');
         const mailEl = document.querySelector('.user-profile .user-info small');
         
+        console.log('Elementos encontrados:', { avatarEl, nameEl, mailEl });
+        console.log('Datos del usuario:', { 
+            displayName: user.displayName, 
+            email: user.email, 
+            photoURL: user.photoURL 
+        });
+        
         if(avatarEl && nameEl && mailEl) {
             if(user.photoURL) {
                 avatarEl.innerText = '';
@@ -930,8 +937,11 @@ onAuthStateChanged(auth, (user) => {
                  avatarEl.innerText = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
                  avatarEl.style.backgroundImage = 'none';
             }
-            nameEl.innerText = user.displayName || 'Usuario';
+            nameEl.innerText = user.displayName || user.email || 'Usuario';
             mailEl.innerText = user.email || 'Anónimo';
+            console.log('Perfil actualizado correctamente');
+        } else {
+            console.warn('No se encontraron todos los elementos del perfil');
         }
 
         // Ocultar Login y mostrar App
