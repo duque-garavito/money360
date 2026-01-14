@@ -277,6 +277,11 @@ const UI = {
         if(target) {
             target.classList.remove('hidden');
             target.classList.add('active');
+            
+            // Forzar renderizado al cambiar de vista
+            if(viewName === 'accounts') {
+                this.renderAccounts();
+            }
         }
     },
 
