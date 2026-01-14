@@ -910,7 +910,8 @@ loginBtn.addEventListener('click', () => {
 onAuthStateChanged(auth, (user) => {
     if (user) {
         // Usuario Logueado
-        loginOverlay.style.display = 'none'; // Ocultar login
+        const loginOverlay = document.getElementById('login-overlay');
+        if(loginOverlay) loginOverlay.style.display = 'none'; // Ocultar login
         
         // Actualizar UI con datos del usuario
         AppData.user = user;
@@ -943,10 +944,6 @@ onAuthStateChanged(auth, (user) => {
         } else {
             console.warn('No se encontraron todos los elementos del perfil');
         }
-
-        // Ocultar Login y mostrar App
-        const loginOverlay = document.getElementById('login-overlay');
-        if(loginOverlay) loginOverlay.style.display = 'none';
 
         // Cargar Datos
         const loadCollection = (colName, targetArray) => {
