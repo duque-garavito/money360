@@ -719,7 +719,25 @@ const Logic = {
         } catch(e) { console.error(e); alert(e.message); }
     },
     
-    // ... deleteTransaction logic ...
+    async deleteTransaction(t) {
+        try {
+            if (t.type === 'transfer') {
+                // Revertir Transferencia: Devolver a Origen, Quitar de Destino
+                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(t.amount) }); // Origen
+                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.categoryId), { balance: increment(-t.amount) }); // Destino (categoryId guarda el ID destino)
+            } else {
+                // Revertir Normal
+                const revertVal = t.type === 'income' ? -t.amount : t.amount;
+                await updateDoc(doc(db, `users/${AppData.user.uid}/accounts`, t.accountId), { balance: increment(revertVal) });
+            }
+
+            await deleteDoc(doc(db, `users/${AppData.user.uid}/transactions`, t.id));
+            // onSnapshot actualizará la UI automáticamente
+        } catch (e) {
+            console.error("Error al borrar:", e);
+            alert("Error al eliminar: " + e.message);
+        }
+    }
 
 };
 
