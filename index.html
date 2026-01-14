@@ -122,7 +122,17 @@
                     <h1>Resumen Financiero</h1>
                     <p>Bienvenido de nuevo</p>
                 </div>
-                <div class="actions">
+                <div class="actions" style="display: flex; gap: 15px; align-items: center;">
+                    <!-- Theme Toggle -->
+                    <div class="theme-toggle" title="Cambiar tema">
+                        <input type="checkbox" id="theme-switch" />
+                        <label for="theme-switch" class="theme-switch-label">
+                            <i class='bx bxs-sun'></i>
+                            <i class='bx bxs-moon'></i>
+                            <div class="slider"></div>
+                        </label>
+                    </div>
+                    
                     <button class="btn-primary" id="btn-add-transaction">
                         <i class='bx bx-plus'></i> Nuevo Movimiento
                     </button>

@@ -80,6 +80,34 @@ const UI = {
         this.bindEvents();
         Charts.init();
         this.initAuthUI();
+        this.initTheme();
+    },
+
+    initTheme() {
+        const themeSwitch = document.getElementById('theme-switch');
+        if (!themeSwitch) return;
+
+        // Cargar tema guardado o usar preferencia del sistema
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const currentTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+        // Aplicar tema inicial
+        if (currentTheme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            themeSwitch.checked = true;
+        }
+
+        // Event listener para cambio de tema
+        themeSwitch.addEventListener('change', () => {
+            if (themeSwitch.checked) {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
     },
 
     initAuthUI() {
