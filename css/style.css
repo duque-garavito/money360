@@ -321,8 +321,9 @@ body {
 }
 
 .chart-container {
-    max-height: 280px;
-    /* Limita la altura del contenedor de gráficos */
+    height: calc(30vh - 60px);
+    min-height: 240px;
+    max-height: 320px;
     width: 100%;
 }
 
