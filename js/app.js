@@ -794,10 +794,36 @@ const Charts = {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true } },
+                    plugins: { 
+                        legend: { 
+                            display: true,
+                            labels: {
+                                padding: 10,
+                                boxWidth: 12
+                            }
+                        } 
+                    },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' } }
+                        x: { 
+                            grid: { display: false },
+                            ticks: { padding: 5 }
+                        },
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            beginAtZero: true,
+                            ticks: { 
+                                padding: 5,
+                                maxTicksLimit: 6
+                            }
+                        }
+                    },
+                    layout: {
+                        padding: {
+                            top: 10,
+                            bottom: 5,
+                            left: 5,
+                            right: 5
+                        }
                     }
                 }
             });
