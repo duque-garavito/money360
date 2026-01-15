@@ -877,7 +877,7 @@ const Charts = {
         };
         this.instances.expenses.update();
 
-        // --- 2. DATOS PARA FLUJO & SALDO ---
+        // --- 2. DATOS PARA FLUJO DE FONDOS (Cashflow Chart) ---
         // Necesitamos agrupar por día
         const dailyData = {};
         
@@ -896,7 +896,30 @@ const Charts = {
 
         const dates = Object.keys(dailyData).sort();
         
-        // -- CHART 3: VARIACIÓN DIARIA DE SALDO --
+        // Actualizar Gráfico de Flujo de Fondos (Barras de Ingresos y Gastos)
+        this.instances.cashflow.data = {
+            labels: dates.map(d => {
+                const [y,m,day] = d.split('-');
+                return `${day}/${m}`;
+            }),
+            datasets: [
+                {
+                    label: 'Ingresos',
+                    data: dates.map(d => dailyData[d].income),
+                    backgroundColor: '#10b981',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Gastos',
+                    data: dates.map(d => dailyData[d].expense),
+                    backgroundColor: '#ef4444',
+                    borderRadius: 4
+                }
+            ]
+        };
+        this.instances.cashflow.update();
+        
+        // --- 3. DATOS PARA VARIACIÓN DE SALDO ---
         // Mostrar si el saldo SUBE o BAJA cada día (Delta)
         const deltas = dates.map(d => dailyData[d].income - dailyData[d].expense);
         
