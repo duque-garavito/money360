@@ -309,6 +309,7 @@ body {
     grid-template-columns: 2fr 1fr;
     gap: 1.5rem;
     margin-bottom: 2.5rem;
+    align-items: start;
 }
 
 .glass-panel {
@@ -322,21 +323,22 @@ body {
 
 .chart-container {
     width: 100%;
-}
-
-.chart-bar {
-    height: 260px;
-}
-
-.chart-doughnut {
-    height: auto;
-    aspect-ratio: 1;
     display: flex;
     flex-direction: column;
 }
 
+.chart-bar {
+    height: 100%;
+    min-height: 280px;
+}
+
+.chart-doughnut {
+    aspect-ratio: 1;
+    max-height: 330px;
+}
+
 .chart-doughnut canvas {
-    max-height: 280px;
+    flex: 1;
 }
 
 
