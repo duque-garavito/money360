@@ -1029,7 +1029,12 @@ onAuthStateChanged(auth, (user) => {
                 const unsub = onSnapshot(q, (snap) => {
                     AppData[targetArray] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     if(colName === 'transactions') {
-                         AppData.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+                         // Ordenar por fecha de creación (más reciente primero)
+                         AppData.transactions.sort((a,b) => {
+                             const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                             const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                             return dateB - dateA;
+                         });
                     }
                     UI.renderAll();
                 }, (error) => {
